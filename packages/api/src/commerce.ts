@@ -9,6 +9,7 @@ import {
   isSurface,
   normalizeCountries,
   quoteImpressionBlocks,
+  validateBuyPayload,
   type Surface,
 } from '@swag-money/shared'
 import type { SwagDb } from './db.ts'
@@ -86,9 +87,10 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
         name,
         role,
         passwordHash: hashPassword(password),
+        setupComplete: 0,
         createdAtMs: clock.now(),
       })
-      return c.json({ token: signSession(id, sessionSecret), user: { id, email, name, role } }, 201)
+      return c.json({ token: signSession(id, sessionSecret), user: { id, email, name, role, setupComplete: false } }, 201)
     } catch (error) {
       const message = messageOf(error)
       if (/unique|duplicate/i.test(message)) {
@@ -108,7 +110,13 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
     }
     return c.json({
       token: signSession(user.id, sessionSecret),
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        setupComplete: user.setupComplete === 1,
+      },
     })
   })
 
@@ -193,7 +201,8 @@ async function checkout(c: { get(key: 'user'): UserRow | undefined; req: { json(
   if (user.role !== 'advertiser') return c.json({ error: 'Advertiser account required', code: 'forbidden' }, 403)
   const body = await readBody(c)
   try {
-    const created = parseCheckout(body)
+    const strict = body.strict === true || body.acknowledgeDelivery !== undefined
+    const created = strict ? parseStrictCheckout(body) : parseCheckout(body)
     const quote = quoteImpressionBlocks({
       blocks: created.blocks,
       bidPerBlockCents: created.bidPerBlockCents,
@@ -218,6 +227,10 @@ async function checkout(c: { get(key: 'user'): UserRow | undefined; req: { json(
       countries: JSON.stringify(created.countries),
       destinationUrl: created.destinationUrl,
       impressionCredits: quote.impressionCredits,
+      companyName: created.companyName,
+      brandIcon: created.brandIcon,
+      pace: created.pace,
+      emailInvoice: created.emailInvoice ? 1 : 0,
       createdAtMs: now,
     })
     await deps.db.insert(checkouts).values({
@@ -231,6 +244,8 @@ async function checkout(c: { get(key: 'user'): UserRow | undefined; req: { json(
       status: 'paid',
       provider: 'mock_card',
       mode: 'mock',
+      pace: created.pace,
+      emailInvoice: created.emailInvoice ? 1 : 0,
       createdAtMs: now,
     })
     return c.json(
@@ -248,13 +263,63 @@ async function checkout(c: { get(key: 'user'): UserRow | undefined; req: { json(
         placement: created.placement,
         countries: created.countries,
         surfaces: created.surfaces,
-        detail: 'Mock card charge recorded locally. No payment network was contacted.',
+        pace: created.pace,
+        forecast: created.forecast,
+        detail: created.emailInvoice
+          ? 'Mock card charge recorded locally. A tax invoice was noted. No mail was sent and no payment network was contacted.'
+          : 'Mock card charge recorded locally. No payment network was contacted.',
       },
       201,
     )
   } catch (error) {
+    if (error instanceof CheckoutInputError) {
+      return c.json({ error: error.message, errors: error.errors, code: 'bad_request' }, 400)
+    }
     const status = error instanceof DomainError || error instanceof PayloadError ? 400 : 400
     return c.json({ error: messageOf(error), code: error instanceof DomainError ? error.code : 'bad_request' }, status)
+  }
+}
+
+class CheckoutInputError extends Error {
+  readonly errors: Record<string, string>
+  constructor(errors: Record<string, string>) {
+    super(Object.values(errors)[0] ?? 'Check the form')
+    this.errors = errors
+  }
+}
+
+function parseStrictCheckout(body: Record<string, unknown>) {
+  const parsed = validateBuyPayload({
+    text: body.text,
+    destinationUrl: body.destinationUrl,
+    companyName: body.companyName,
+    brandIconDataUrl: body.brandIconDataUrl,
+    emailInvoice: body.emailInvoice === true,
+    blocks: body.blocks,
+    bid: body.bid,
+    placement: body.placement,
+    tool: body.tool,
+    pace: body.pace,
+    audience: body.audience,
+    countries: body.countries,
+    acknowledgeDelivery: body.acknowledgeDelivery === true,
+  })
+  if (!parsed.ok) throw new CheckoutInputError(parsed.errors)
+  return {
+    name: parsed.value.name,
+    advertiserName: parsed.value.advertiserName,
+    text: parsed.value.text,
+    destinationUrl: parsed.value.destinationUrl,
+    blocks: parsed.value.blocks,
+    bidPerBlockCents: parsed.value.bidPerBlockCents,
+    surfaces: parsed.value.surfaces,
+    countries: parsed.value.countries,
+    placement: parsed.value.placement,
+    companyName: parsed.value.companyName,
+    brandIcon: parsed.value.brandIconDataUrl,
+    pace: parsed.value.pace,
+    emailInvoice: parsed.value.emailInvoice,
+    forecast: parsed.value.forecast,
   }
 }
 
@@ -315,6 +380,11 @@ function parseCheckout(body: Record<string, unknown>) {
     surfaces: uniqueSurfaces,
     countries,
     placement: resolvedPlacement,
+    companyName: advertiserName,
+    brandIcon: '',
+    pace: 'medium' as const,
+    emailInvoice: false,
+    forecast: null,
   }
 }
 

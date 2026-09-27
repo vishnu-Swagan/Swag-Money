@@ -1,7 +1,10 @@
 import { formatUsd } from '@swag-money/shared'
+import Link from 'next/link'
+import { BuyForm } from '../components/buy-form'
 import { CopyCommand } from '../components/copy-command'
 import { SiteFooter, SiteNav } from '../components/nav'
-import { API_URL } from '../lib/api'
+import { API_URL, apiJson } from '../lib/api'
+import { COMPARE_NOTE, COMPARE_ROWS } from '../lib/compare'
 import { signIn } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -25,9 +28,10 @@ export default async function HomePage({
 }) {
   const query = await searchParams
   const stats = await loadStats()
+  const me = await apiJson<{ role: string }>('/v1/me')
   return (
     <>
-      <SiteNav />
+      <SiteNav signedIn={me.ok} />
       <main id="content">
         <section className="wrap hero">
           <div>
@@ -85,11 +89,29 @@ export default async function HomePage({
           </aside>
         </section>
 
-        <section className="wrap band" id="differentiators">
-          <h2>Four things the usual wait-state network does not do.</h2>
+        <section className="wrap band" id="compare">
+          <h2>How this differs from Kickbacks.ai</h2>
           <p className="sub">
-            Kickbacks.ai turned spinner text into an auction. It also pulls executable code from its servers and treats a
-            local HTTP call as proof that a human saw the ad. Swag-Money is built around the opposite constraints.
+            As of September 2026, from their public pages and the published extension. The full table is on the comparison page.
+            Nothing here is a claim about Swag-Money’s user count.
+          </p>
+          <div className="compare-board short">
+            {COMPARE_ROWS.slice(0, 4).map((row) => (
+              <article key={row.id}>
+                <h3>{row.topic}</h3>
+                <p><strong>Kickbacks.ai today.</strong> {row.shortKickbacks}</p>
+                <p><strong>Swag-Money.</strong> {row.shortSwag}</p>
+              </article>
+            ))}
+          </div>
+          <p><Link className="button" href="/compare">Full comparison</Link></p>
+          <p className="tiny">{COMPARE_NOTE}</p>
+        </section>
+
+        <section className="wrap band" id="differentiators">
+          <h2>Four constraints the client is built around.</h2>
+          <p className="sub">
+            The comparison page cites the public sources. These four are the product rules on this side of that table.
           </p>
           <div className="grid-4">
             <article className="card">
@@ -198,6 +220,14 @@ export default async function HomePage({
               </ul>
             </article>
           </div>
+        </section>
+
+        <section className="wrap band" id="buy">
+          <h2>Buy a block.</h2>
+          <p className="sub">
+            Same fields as a self-serve impression order: line, destination, brand, icon, invoice, bid, blocks, surface, pace, and country. The total and the forecast update as you type. Checkout is mocked.
+          </p>
+          <BuyForm signedIn={me.ok} role={me.ok ? me.data.role : undefined} />
         </section>
 
         <section className="wrap band security" id="security">

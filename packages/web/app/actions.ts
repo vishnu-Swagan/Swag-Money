@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { surfacesForPlacement, type Placement } from '@swag-money/shared'
+import { validateBuyPayload, validateContact, validatePrivacyRequest, validateSetup } from '@swag-money/shared'
 import { API_URL } from '../lib/api'
 
 async function token(): Promise<string | undefined> {
@@ -119,7 +119,13 @@ export async function requestPayout(formData: FormData) {
   redirect(`/developers?notice=${encodeURIComponent(note)}`)
 }
 
+export async function googleSignIn(formData: FormData) {
+  if (formData.get('adult') !== 'yes') redirect('/login?error=adult')
+  redirect('/login?error=google')
+}
+
 export async function loginAccount(formData: FormData) {
+  if (formData.get('adult') !== 'yes') redirect('/login?error=adult')
   const response = await fetch(`${API_URL}/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -129,14 +135,18 @@ export async function loginAccount(formData: FormData) {
     }),
     cache: 'no-store',
   })
-  if (!response.ok) redirect('/login?error=1')
-  const body = (await response.json()) as { token: string; user: { role: string } }
+  if (!response.ok) redirect('/login?error=retry')
+  const body = (await response.json()) as { token: string; user: { role: string; setupComplete?: boolean } }
   const jar = await cookies()
   jar.set('swag_session', body.token, { httpOnly: true, sameSite: 'lax', path: '/' })
+  if (body.user.setupComplete === false) redirect('/login')
+  const next = String(formData.get('next') ?? '')
+  if (next.startsWith('/') && !next.startsWith('//')) redirect(next)
   redirect(body.user.role === 'advertiser' ? '/advertisers' : '/developers')
 }
 
 export async function signupAccount(formData: FormData) {
+  if (formData.get('adult') !== 'yes') redirect('/signup?error=Confirm%20that%20you%20are%2018%20or%20older%20and%20agree%20to%20the%20terms.')
   const response = await fetch(`${API_URL}/v1/auth/signup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -152,39 +162,24 @@ export async function signupAccount(formData: FormData) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null
     redirect(`/signup?error=${encodeURIComponent(body?.error ?? 'Could not create the account')}`)
   }
-  const body = (await response.json()) as { token: string; user: { role: string } }
+  const body = (await response.json()) as { token: string; user: { role: string; setupComplete?: boolean } }
   const jar = await cookies()
   jar.set('swag_session', body.token, { httpOnly: true, sameSite: 'lax', path: '/' })
+  if (body.user.setupComplete === false) redirect('/login')
   redirect(body.user.role === 'advertiser' ? '/advertise' : '/developers')
 }
 
-export async function checkoutBlocks(formData: FormData) {
+export type FormState = { errors: Record<string, string> } | null
+
+export async function checkoutBlocks(_prev: FormState, formData: FormData): Promise<FormState> {
+  const draft = buyDraft(formData)
+  const checked = validateBuyPayload({ ...draft, requireEmail: !(await token()) })
+  if (!checked.ok) return { errors: checked.errors }
   let session = await token()
   if (!session) {
-    const signup = await fetch(`${API_URL}/v1/auth/signup`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: String(formData.get('email') ?? ''),
-        name: String(formData.get('personName') ?? ''),
-        password: String(formData.get('password') ?? ''),
-        role: 'advertiser',
-      }),
-      cache: 'no-store',
-    })
-    if (!signup.ok) {
-      const body = (await signup.json().catch(() => null)) as { error?: string } | null
-      redirect(`/advertise?error=${encodeURIComponent(body?.error ?? 'Create an advertiser account first')}`)
-    }
-    const created = (await signup.json()) as { token: string }
-    session = created.token
-    const jar = await cookies()
-    jar.set('swag_session', session, { httpOnly: true, sameSite: 'lax', path: '/' })
-  }
-  const placement = String(formData.get('placement') ?? 'any')
-  let surfaces = formData.getAll('tools').map(String)
-  if (surfaces.length === 0 && (placement === 'terminal' || placement === 'editor' || placement === 'browser')) {
-    surfaces = surfacesForPlacement(placement as Placement)
+    const linked = await openAdvertiserSession(String(formData.get('email') ?? ''))
+    if ('errors' in linked) return linked
+    session = linked.token
   }
   let response: Response
   try {
@@ -195,30 +190,214 @@ export async function checkoutBlocks(formData: FormData) {
         authorization: `Bearer ${session}`,
       },
       body: JSON.stringify({
-        name: String(formData.get('name') ?? ''),
-        advertiserName: String(formData.get('advertiserName') ?? ''),
-        text: String(formData.get('text') ?? ''),
-        destinationUrl: String(formData.get('destinationUrl') ?? ''),
-        blocks: Number(formData.get('blocks') ?? ''),
-        bidPerBlockCents: dollarsToCents(String(formData.get('bid') ?? '')),
-        surfaces,
-        placement,
-        countries: formData.getAll('countries').map(String),
+        strict: true,
+        text: draft.text,
+        destinationUrl: draft.destinationUrl,
+        companyName: draft.companyName,
+        brandIconDataUrl: draft.brandIconDataUrl,
+        emailInvoice: draft.emailInvoice,
+        blocks: draft.blocks,
+        bid: draft.bid,
+        placement: draft.placement,
+        tool: draft.tool,
+        pace: draft.pace,
+        audience: draft.audience,
+        countries: draft.countries,
+        acknowledgeDelivery: draft.acknowledgeDelivery,
       }),
       cache: 'no-store',
     })
   } catch (error) {
-    redirect(`/advertise?error=${encodeURIComponent(error instanceof Error ? error.message : 'API unavailable')}`)
+    return { errors: { form: error instanceof Error ? error.message : 'API unavailable' } }
   }
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null
-    redirect(`/advertise?error=${encodeURIComponent(body?.error ?? 'Checkout failed')}`)
+    const body = (await response.json().catch(() => null)) as { error?: string; errors?: Record<string, string> } | null
+    return { errors: body?.errors ?? { form: body?.error ?? 'Checkout failed' } }
   }
   redirect('/advertisers?notice=checkout')
 }
 
-export async function privacyChoice() {
+export async function requestMagicLink(_prev: MagicState, formData: FormData): Promise<MagicState> {
+  if (formData.get('adult') !== 'yes') {
+    return { error: 'Confirm that you are 18 or older and agree to the terms.' }
+  }
+  const response = await fetch(`${API_URL}/v1/auth/magic-link`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: String(formData.get('email') ?? ''),
+      adult: true,
+      role: 'developer',
+    }),
+    cache: 'no-store',
+  })
+  const body = (await response.json().catch(() => null)) as { error?: string; devToken?: string } | null
+  if (!response.ok) return { error: body?.error ?? 'Could not start sign-in.' }
+  return {
+    email: String(formData.get('email') ?? ''),
+    devToken: body?.devToken,
+    sent: true,
+  }
+}
+
+export async function consumeMagicLink(formData: FormData) {
+  const response = await fetch(`${API_URL}/v1/auth/magic-link/consume`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: String(formData.get('token') ?? '') }),
+    cache: 'no-store',
+  })
+  if (!response.ok) redirect('/login?error=retry')
+  const body = (await response.json()) as { token: string }
+  const jar = await cookies()
+  jar.set('swag_session', body.token, { httpOnly: true, sameSite: 'lax', path: '/' })
+  const next = String(formData.get('next') ?? '')
+  redirect(next.startsWith('/') && !next.startsWith('//') ? `/login?next=${encodeURIComponent(next)}` : '/login')
+}
+
+export async function completeSetup(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = validateSetup({
+    country: String(formData.get('country') ?? ''),
+    newsOptIn: formData.get('newsOptIn') === 'yes',
+    payoutPreference: String(formData.get('payoutPreference') ?? ''),
+  })
+  if (!parsed.ok) return { errors: parsed.errors }
+  const response = await fetch(`${API_URL}/v1/auth/setup`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${await token()}`,
+    },
+    body: JSON.stringify(parsed.value),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string; errors?: Record<string, string> } | null
+    return { errors: body?.errors ?? { form: body?.error ?? 'Could not save setup' } }
+  }
+  const next = String(formData.get('next') ?? '')
+  if (next.startsWith('/') && !next.startsWith('//')) redirect(next)
+  redirect('/developers')
+}
+
+export async function reactivateAccount() {
+  await fetch(`${API_URL}/v1/account/deletion`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${await token()}`,
+    },
+    body: JSON.stringify({ action: 'reactivate' }),
+    cache: 'no-store',
+  })
+  redirect('/login')
+}
+
+export async function keepDeletion() {
+  const jar = await cookies()
+  jar.delete('swag_session')
+  redirect('/login?notice=deletion')
+}
+
+export async function submitPrivacy(_prev: FormState, formData: FormData): Promise<FormState> {
+  const path = formData.get('path') === 'session' ? 'session' : formData.get('cantLogin') === 'yes' ? 'email' : ''
+  const parsed = validatePrivacyRequest({
+    kind: String(formData.get('kind') ?? ''),
+    email: String(formData.get('email') ?? ''),
+    region: String(formData.get('region') ?? ''),
+    details: String(formData.get('details') ?? ''),
+    authorizedAgent: formData.get('authorizedAgent') === 'yes',
+    honeypot: String(formData.get('companyWebsite') ?? ''),
+    path,
+  })
+  if (!parsed.ok) return { errors: parsed.errors }
+  if ('discarded' in parsed) redirect('/privacy-choices?notice=received')
+  const response = await fetch(`${API_URL}/v1/privacy-requests`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(await token() ? { authorization: `Bearer ${await token()}` } : {}),
+    },
+    body: JSON.stringify({
+      ...parsed.value,
+      authorizedAgent: parsed.value.authorizedAgent,
+      companyWebsite: String(formData.get('companyWebsite') ?? ''),
+    }),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string; errors?: Record<string, string> } | null
+    return { errors: body?.errors ?? { form: body?.error ?? 'Could not store the request' } }
+  }
   redirect('/privacy-choices?notice=received')
+}
+
+export async function submitContact(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = validateContact({
+    name: String(formData.get('name') ?? ''),
+    email: String(formData.get('email') ?? ''),
+    topic: String(formData.get('topic') ?? ''),
+    message: String(formData.get('message') ?? ''),
+    honeypot: String(formData.get('companyWebsite') ?? ''),
+  })
+  if (!parsed.ok) return { errors: parsed.errors }
+  if ('discarded' in parsed) redirect('/contact?notice=received')
+  const response = await fetch(`${API_URL}/v1/contact`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(parsed.value),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string; errors?: Record<string, string> } | null
+    return { errors: body?.errors ?? { form: body?.error ?? 'Could not store the message' } }
+  }
+  redirect('/contact?notice=received')
+}
+
+export type MagicState = { error?: string; email?: string; devToken?: string; sent?: boolean } | null
+
+function buyDraft(formData: FormData) {
+  return {
+    text: String(formData.get('text') ?? ''),
+    destinationUrl: String(formData.get('destinationUrl') ?? ''),
+    companyName: String(formData.get('companyName') ?? ''),
+    brandIconDataUrl: String(formData.get('brandIcon') ?? ''),
+    emailInvoice: formData.get('emailInvoice') === 'yes',
+    blocks: Number(formData.get('blocks') ?? ''),
+    bid: String(formData.get('bid') ?? ''),
+    placement: String(formData.get('placement') ?? ''),
+    tool: String(formData.get('tool') ?? ''),
+    pace: String(formData.get('pace') ?? ''),
+    audience: String(formData.get('audience') ?? ''),
+    countries: formData.getAll('countries').map(String),
+    acknowledgeDelivery: formData.get('acknowledgeDelivery') === 'yes',
+    email: String(formData.get('email') ?? ''),
+  }
+}
+
+async function openAdvertiserSession(email: string): Promise<{ token: string } | { errors: Record<string, string> }> {
+  const sent = await fetch(`${API_URL}/v1/auth/magic-link`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, role: 'advertiser' }),
+    cache: 'no-store',
+  })
+  const link = (await sent.json().catch(() => null)) as { error?: string; devToken?: string } | null
+  if (!sent.ok || !link?.devToken) {
+    return { errors: { email: link?.error ?? 'Sign in on the login page, then come back to buy.' } }
+  }
+  const consumed = await fetch(`${API_URL}/v1/auth/magic-link/consume`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: link.devToken }),
+    cache: 'no-store',
+  })
+  if (!consumed.ok) return { errors: { email: 'Could not open an advertiser session for that email.' } }
+  const body = (await consumed.json()) as { token: string }
+  const jar = await cookies()
+  jar.set('swag_session', body.token, { httpOnly: true, sameSite: 'lax', path: '/' })
+  return { token: body.token }
 }
 
 function dollarsToCents(raw: string): number {
