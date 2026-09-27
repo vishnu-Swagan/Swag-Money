@@ -6,13 +6,29 @@ export const IMPRESSION_TTL_MS = 120_000
 export const AD_TEXT_MAX = 80
 export const ADVERTISER_MAX = 40
 export const NAME_MAX = 60
+/** Default developer share. 5000 = 50%. Raise with SWAG_DEVELOPER_SHARE_BPS. */
+export const DEFAULT_DEVELOPER_SHARE_BPS = 5_000
+export const IMPRESSIONS_PER_BLOCK = 1_000
+export const MIN_BLOCK_BID_CENTS = 50
+export const MAX_BLOCKS = 100
+export const MAX_TARGET_COUNTRIES = 20
+/** Added to the invoice, not to the auction budget, when any country is selected. */
+export const COUNTRY_SURCHARGE_PER_BLOCK_CENTS = 75
 
-export const SURFACES = ['claude-code', 'vscode', 'browser', 'jetbrains'] as const
-export type Surface = (typeof SURFACES)[number]
-
-export function isSurface(value: string): value is Surface {
-  return (SURFACES as readonly string[]).includes(value)
-}
+export {
+  isSurface,
+  normalizeCountries,
+  placementForSurface,
+  PLACEMENTS,
+  SURFACES,
+  surfacesForPlacement,
+  TOOLS,
+  toolById,
+  type IntegrationStatus,
+  type Placement,
+  type Surface,
+  type ToolIntegration,
+} from './catalog.ts'
 
 export function formatUsd(cents: number): string {
   const negative = cents < 0
@@ -32,13 +48,67 @@ export class DomainError extends Error {
   }
 }
 
-export function splitRevenue(priceCents: number): { developerCents: number; platformCents: number } {
+export function splitRevenue(
+  priceCents: number,
+  developerShareBps: number = DEFAULT_DEVELOPER_SHARE_BPS,
+): { developerCents: number; platformCents: number } {
   if (!Number.isInteger(priceCents) || priceCents < 0) {
     throw new DomainError('bad_amount', 'priceCents must be a non-negative integer')
   }
-  const developerCents = Math.floor(priceCents / 2)
+  if (!Number.isInteger(developerShareBps) || developerShareBps < 0 || developerShareBps > 10_000) {
+    throw new DomainError('bad_share', 'developerShareBps must be an integer from 0 to 10000')
+  }
+  const developerCents = Math.floor((priceCents * developerShareBps) / 10_000)
   const platformCents = priceCents - developerCents
   return { developerCents, platformCents }
+}
+
+export type BlockQuote = {
+  blocks: number
+  impressions: number
+  bidPerBlockCents: number
+  countrySurchargeCents: number
+  totalCents: number
+  maxBidCents: number
+  budgetCents: number
+  impressionCredits: number
+  estimatedImpressionsAtMaxBid: number
+}
+
+/** A block is 1,000 impression credits prepaid at the bid. The live auction still clears per impression. */
+export function quoteImpressionBlocks(input: {
+  blocks: number
+  bidPerBlockCents: number
+  countryCount: number
+}): BlockQuote {
+  if (!Number.isInteger(input.blocks) || input.blocks < 1 || input.blocks > MAX_BLOCKS) {
+    throw new DomainError('bad_blocks', `blocks must be an integer from 1 to ${MAX_BLOCKS}`)
+  }
+  if (!Number.isInteger(input.bidPerBlockCents) || input.bidPerBlockCents < MIN_BLOCK_BID_CENTS) {
+    throw new DomainError('bid_floor', `Bid per block must be at least ${MIN_BLOCK_BID_CENTS} cents`)
+  }
+  if (
+    !Number.isInteger(input.countryCount) ||
+    input.countryCount < 0 ||
+    input.countryCount > MAX_TARGET_COUNTRIES
+  ) {
+    throw new DomainError('bad_countries', `Choose at most ${MAX_TARGET_COUNTRIES} countries`)
+  }
+  const countrySurchargeCents =
+    input.countryCount > 0 ? COUNTRY_SURCHARGE_PER_BLOCK_CENTS * input.blocks : 0
+  const budgetCents = input.blocks * input.bidPerBlockCents
+  const maxBidCents = Math.max(AUCTION_RESERVE_CENTS, Math.round(input.bidPerBlockCents / IMPRESSIONS_PER_BLOCK))
+  return {
+    blocks: input.blocks,
+    impressions: input.blocks * IMPRESSIONS_PER_BLOCK,
+    bidPerBlockCents: input.bidPerBlockCents,
+    countrySurchargeCents,
+    totalCents: budgetCents + countrySurchargeCents,
+    maxBidCents,
+    budgetCents,
+    impressionCredits: input.blocks * IMPRESSIONS_PER_BLOCK,
+    estimatedImpressionsAtMaxBid: Math.floor(budgetCents / maxBidCents),
+  }
 }
 
 /** Convert withdrawable earnings into AI API credits, adding a 10% bonus. */
@@ -71,6 +141,32 @@ export type AuctionCandidate = {
   budgetRemainingCents: number
   createdAtMs: number
   surfaces: readonly string[]
+  /** Empty or omitted means every country. */
+  countries?: readonly string[]
+  /** Omitted or "any" matches every placement. */
+  placement?: string
+}
+
+export function matchesInventory(
+  candidate: AuctionCandidate,
+  surface: string,
+  opts?: { country?: string; placement?: string },
+): boolean {
+  if (!(candidate.surfaces.includes(surface) || candidate.surfaces.includes('any'))) return false
+  if (
+    candidate.placement &&
+    candidate.placement !== 'any' &&
+    opts?.placement &&
+    candidate.placement !== opts.placement
+  ) {
+    return false
+  }
+  const countries = candidate.countries ?? []
+  if (countries.length > 0) {
+    const wanted = opts?.country?.trim().toUpperCase()
+    if (!wanted || !countries.some((code) => code.toUpperCase() === wanted)) return false
+  }
+  return true
 }
 
 export type AuctionWinner = {
@@ -90,7 +186,7 @@ export type AuctionWinner = {
 export function runEnglishAuction(
   candidates: readonly AuctionCandidate[],
   surface: string,
-  opts?: { reserveCents?: number; incrementCents?: number },
+  opts?: { reserveCents?: number; incrementCents?: number; country?: string; placement?: string },
 ): AuctionWinner | null {
   const reserve = opts?.reserveCents ?? AUCTION_RESERVE_CENTS
   const increment = opts?.incrementCents ?? AUCTION_INCREMENT_CENTS
@@ -102,7 +198,7 @@ export function runEnglishAuction(
   }
 
   const pool = candidates
-    .filter((candidate) => candidate.surfaces.includes(surface) || candidate.surfaces.includes('any'))
+    .filter((candidate) => matchesInventory(candidate, surface, opts))
     .filter((candidate) => candidate.maxBidCents >= reserve && candidate.budgetRemainingCents >= reserve)
     .slice()
     .sort((a, b) => b.maxBidCents - a.maxBidCents || a.createdAtMs - b.createdAtMs)

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   email text NOT NULL UNIQUE,
   name text NOT NULL,
   role text NOT NULL,
+  password_hash text NOT NULL DEFAULT '',
   created_at_ms bigint NOT NULL
 );
 CREATE TABLE IF NOT EXISTS installs (
@@ -29,6 +30,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
   spent_cents integer NOT NULL,
   reserved_cents integer NOT NULL,
   surfaces text NOT NULL,
+  placement text NOT NULL DEFAULT 'any',
+  countries text NOT NULL DEFAULT '[]',
+  destination_url text NOT NULL DEFAULT '',
+  impression_credits integer NOT NULL DEFAULT 0,
   created_at_ms bigint NOT NULL
 );
 CREATE TABLE IF NOT EXISTS impressions (
@@ -70,8 +75,35 @@ CREATE TABLE IF NOT EXISTS payouts (
   status text NOT NULL,
   created_at_ms bigint NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_keys (
+  id text PRIMARY KEY,
+  advertiser_id text NOT NULL REFERENCES users(id),
+  prefix text NOT NULL,
+  key_hash text NOT NULL,
+  label text NOT NULL,
+  created_at_ms bigint NOT NULL,
+  revoked_at_ms bigint
+);
+CREATE TABLE IF NOT EXISTS checkouts (
+  id text PRIMARY KEY,
+  advertiser_id text NOT NULL REFERENCES users(id),
+  campaign_id text NOT NULL REFERENCES campaigns(id),
+  blocks integer NOT NULL,
+  bid_per_block_cents integer NOT NULL,
+  country_surcharge_cents integer NOT NULL,
+  total_cents integer NOT NULL,
+  status text NOT NULL,
+  provider text NOT NULL,
+  mode text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
 CREATE INDEX IF NOT EXISTS impressions_developer_idx ON impressions (developer_id, served_at_ms);
 CREATE INDEX IF NOT EXISTS ledger_user_idx ON ledger (user_id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text NOT NULL DEFAULT '';
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS placement text NOT NULL DEFAULT 'any';
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS countries text NOT NULL DEFAULT '[]';
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS destination_url text NOT NULL DEFAULT '';
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS impression_credits integer NOT NULL DEFAULT 0;
 `
 
 export type SwagDb = ReturnType<typeof drizzle<typeof schema>>

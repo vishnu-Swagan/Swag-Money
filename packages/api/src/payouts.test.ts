@@ -42,6 +42,29 @@ describe('payout providers', () => {
       {},
     )
     expect(lightning.mode).toBe('mock')
+    expect(lightning.schedule).toBe('on_demand')
+
+    const upi = settlePayout({ provider: 'upi', amountCents: 1000, destination: 'ada@okaxis' }, {})
+    expect(upi.mode).toBe('mock')
+    expect(upi.detail).toContain('On demand')
+    expect(upi.schedule).toBe('on_demand')
+
+    const upiSandbox = settlePayout(
+      { provider: 'upi', amountCents: 1000, destination: 'ada@okaxis' },
+      { razorpayxKeyId: 'rzp_test_demo', razorpayxKeySecret: 'present' },
+    )
+    expect(upiSandbox.mode).toBe('sandbox')
+    expect(upiSandbox.detail).toContain('not sent')
+
+    expect(() =>
+      settlePayout(
+        { provider: 'upi', amountCents: 1000, destination: 'ada@okaxis' },
+        { razorpayxKeyId: 'rzp_live_nope', razorpayxKeySecret: 'nope' },
+      ),
+    ).toThrow(PayoutProviderError)
+    expect(() => settlePayout({ provider: 'upi', amountCents: 1000, destination: 'not an upi' }, {})).toThrow(
+      PayoutProviderError,
+    )
   })
 })
 

@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {
@@ -20,18 +20,22 @@ import {
   ADVERTISER_MAX,
   AD_TEXT_MAX,
   AUCTION_RESERVE_CENTS,
+  DEFAULT_DEVELOPER_SHARE_BPS,
   DomainError,
   NAME_MAX,
   SURFACES,
   assertPayoutAmount,
   isSurface,
+  placementForSurface,
   runEnglishAuction,
   splitRevenue,
   type AuctionCandidate,
 } from '@swag-money/shared'
+import { registerCommerce } from './commerce.ts'
 import type { SwagDb } from './db.ts'
+import { hashApiKey } from './passwords.ts'
 import { settlePayout, PayoutProviderError, type PayoutEnv, type PayoutProviderId } from './payouts.ts'
-import { campaigns, impressions, installs, ledger, payouts, users } from './schema.ts'
+import { apiKeys, campaigns, impressions, installs, ledger, payouts, users } from './schema.ts'
 import { readSession, signSession } from './session.ts'
 
 type UserRow = typeof users.$inferSelect
@@ -45,11 +49,12 @@ export type AppEnv = PayoutEnv & {
   payoutMinCents: number
   impressionTtlMs: number
   sessionSecret: string
+  developerShareBps?: number
 }
 
 type Vars = { user: UserRow | undefined }
 
-const PROVIDERS: readonly PayoutProviderId[] = ['stripe_connect', 'solana', 'lightning', 'api_credits']
+const PROVIDERS: readonly PayoutProviderId[] = ['stripe_connect', 'solana', 'lightning', 'api_credits', 'upi']
 
 function asNumber(value: unknown): number {
   const number = typeof value === 'number' ? value : Number(value)
@@ -84,6 +89,10 @@ export function createApp(deps: {
   signingPublicKey: Uint8Array
 }) {
   const { db, clock, env, signingPrivateKey, signingPublicKey } = deps
+  const developerShareBps = env.developerShareBps ?? DEFAULT_DEVELOPER_SHARE_BPS
+  if (!Number.isInteger(developerShareBps) || developerShareBps < 0 || developerShareBps > 10_000) {
+    throw new Error('developerShareBps must be an integer from 0 to 10000')
+  }
   const app = new Hono<{ Variables: Vars }>()
   const seenRequests = new Set<string>()
   const requestHits = new Map<string, number[]>()
@@ -93,9 +102,19 @@ export function createApp(deps: {
     const header = c.req.header('authorization') ?? ''
     if (header.startsWith('Bearer ')) {
       const userId = readSession(header.slice('Bearer '.length), env.sessionSecret)
+      const token = header.slice('Bearer '.length)
       if (userId) {
         const [user] = await db.select().from(users).where(eq(users.id, userId))
         if (user) c.set('user', user)
+      } else if (token.startsWith('sm_test_')) {
+        const [key] = await db
+          .select()
+          .from(apiKeys)
+          .where(and(eq(apiKeys.keyHash, hashApiKey(token)), isNull(apiKeys.revokedAtMs)))
+        if (key) {
+          const [user] = await db.select().from(users).where(eq(users.id, key.advertiserId))
+          if (user) c.set('user', user)
+        }
       }
     }
     await next()
@@ -107,6 +126,7 @@ export function createApp(deps: {
     allowMethods: ['GET', 'POST', 'OPTIONS'],
   })
   app.use('/v1/public-key', publicCors)
+  app.use('/v1/public/*', publicCors)
   app.use('/v1/ads/*', publicCors)
 
   app.get('/', (c) => c.json({ service: 'swag-money', publicKey: '/v1/public-key' }))
@@ -194,6 +214,8 @@ export function createApp(deps: {
       user: { id: user.id, name: user.name, email: user.email },
       balanceCents,
       payoutMinCents: env.payoutMinCents,
+      payoutSchedule: 'on_demand',
+      developerShareBps,
       minViewMs: env.minViewMs,
       verifiedImpressions: count('verified'),
       rejectedImpressions: count('rejected'),
@@ -415,19 +437,15 @@ export function createApp(deps: {
     await releaseExpired()
 
     const active = await db.select().from(campaigns).where(eq(campaigns.status, 'active'))
-    const candidates: AuctionCandidate[] = active.map((row) => ({
-      campaignId: row.id,
-      maxBidCents: row.maxBidCents,
-      budgetRemainingCents: row.budgetCents - row.spentCents - row.reservedCents,
-      createdAtMs: asNumber(row.createdAtMs),
-      surfaces: parseSurfaces(row.surfaces),
-    }))
-    const winner = runEnglishAuction(candidates, surface)
+    const country = typeof body.country === 'string' ? body.country : undefined
+    const placement = typeof body.placement === 'string' ? body.placement : placementForSurface(surface)
+    const candidates = active.map(toCandidate)
+    const winner = runEnglishAuction(candidates, surface, { country, placement })
     if (!winner) return c.json({ error: 'No eligible campaign for this surface', code: 'no_fill' }, 404)
     const campaign = active.find((row) => row.id === winner.campaignId)
     if (!campaign) return c.json({ error: 'Winning campaign disappeared', code: 'no_fill' }, 404)
 
-    const split = splitRevenue(winner.priceCents)
+    const split = splitRevenue(winner.priceCents, developerShareBps)
     const impressionId = crypto.randomUUID()
     const nonce = randomHex(16)
     const expiresAt = new Date(clock.now() + env.impressionTtlMs).toISOString()
@@ -593,6 +611,12 @@ export function createApp(deps: {
         spentCents: sql`${campaigns.spentCents} + ${row.priceCents}`,
       })
       .where(eq(campaigns.id, row.campaignId))
+    await db.execute(sql`
+      UPDATE campaigns
+      SET impression_credits = impression_credits - 1,
+          status = CASE WHEN impression_credits - 1 <= 0 THEN 'paused' ELSE status END
+      WHERE id = ${row.campaignId} AND impression_credits > 0
+    `)
 
     return c.json({
       status: 'verified',
@@ -626,19 +650,11 @@ export function createApp(deps: {
   }
 
   function preview(rows: Array<typeof campaigns.$inferSelect>, surface: string) {
-    const candidates: AuctionCandidate[] = rows
-      .filter((row) => row.status === 'active')
-      .map((row) => ({
-        campaignId: row.id,
-        maxBidCents: row.maxBidCents,
-        budgetRemainingCents: row.budgetCents - row.spentCents - row.reservedCents,
-        createdAtMs: asNumber(row.createdAtMs),
-        surfaces: parseSurfaces(row.surfaces),
-      }))
-    const winner = runEnglishAuction(candidates, surface)
+    const candidates = rows.filter((row) => row.status === 'active').map(toCandidate)
+    const winner = runEnglishAuction(candidates, surface, { placement: placementForSurface(surface) })
     if (!winner) return null
     const campaign = rows.find((row) => row.id === winner.campaignId)
-    const split = splitRevenue(winner.priceCents)
+    const split = splitRevenue(winner.priceCents, developerShareBps)
     return {
       campaignId: winner.campaignId,
       name: campaign?.name ?? 'Unknown',
@@ -648,6 +664,13 @@ export function createApp(deps: {
       secondMaxBidCents: winner.secondMaxBidCents,
     }
   }
+
+  registerCommerce(app, {
+    db,
+    clock,
+    sessionSecret: env.sessionSecret,
+    developerShareBps,
+  })
 
   return app
 }
@@ -680,7 +703,22 @@ function presentCampaign(row: typeof campaigns.$inferSelect) {
     reservedCents: row.reservedCents,
     remainingCents: row.budgetCents - row.spentCents - row.reservedCents,
     surfaces: parseSurfaces(row.surfaces),
+    placement: row.placement,
+    countries: parseSurfaces(row.countries),
+    impressionCredits: row.impressionCredits,
     createdAtMs: asNumber(row.createdAtMs),
+  }
+}
+
+function toCandidate(row: typeof campaigns.$inferSelect): AuctionCandidate {
+  return {
+    campaignId: row.id,
+    maxBidCents: row.maxBidCents,
+    budgetRemainingCents: row.budgetCents - row.spentCents - row.reservedCents,
+    createdAtMs: asNumber(row.createdAtMs),
+    surfaces: parseSurfaces(row.surfaces),
+    countries: parseSurfaces(row.countries),
+    placement: row.placement,
   }
 }
 

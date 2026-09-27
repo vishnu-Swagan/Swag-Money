@@ -10,5 +10,6 @@
   ]]></description>
   <depends>com.intellij.modules.platform</depends>
   <extensions defaultExtensionNs="com.intellij">
+    <statusBarWidgetFactory implementation="ai.swagmoney.SwagStatusWidgetFactory" id="SwagMoneyStatus"/>
   </extensions>
 </idea-plugin>

@@ -12,16 +12,18 @@ It is aimed at the same inventory as Kickbacks.ai, with four constraints that pr
 ## Architecture
 
 ```text
-packages/shared        auction, 50/50 split, $10 threshold, 10% credit bonus
+packages/shared        auction, configurable share, block quotes, tool catalog
 packages/crypto        Ed25519 payloads, display-string rules, render transcripts
-packages/api           Hono API, English auction, impression ledger, payout providers
+packages/api           Hono API, auction, ledger, checkout, API keys, payouts
 packages/client-core   verify, render, sample, sign, restore
+packages/integrations  official config writers (tips, hooks, status lines)
+packages/installer     `swag-money detect|apply`
 packages/adapters
-  claude-code          working CLI. Writes ~/.claude/settings.json spinnerVerbs
-  vscode               status-bar extension for VS Code, Cursor, and Windsurf
-  browser              MV3 extension for chatgpt.com and claude.ai
-  jetbrains            stub. Fails closed until a plugin implements RenderSurface
-packages/web           Next.js landing page and both dashboards
+  claude-code          working CLI. spinnerVerbs, plus tips and statusLine via the installer
+  vscode               status bar for VS Code, Cursor, Windsurf, Cline, and Kiro
+  browser              MV3 content script for the web assistants and app builders
+  jetbrains            scaffold. StatusBarWidgetFactory, runtime still fails closed
+packages/web           Next.js site, dashboards, install pages, advertiser checkout
 ```
 
 The database is Postgres, embedded with PGlite so `pnpm dev` does not need a server. The schema is ordinary Postgres SQL. This MVP opens PGlite at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Pointing the process at an external database is a driver swap in `packages/api/src/db.ts`.
@@ -101,17 +103,23 @@ Proxy English auction, one impression at a time:
 - A high bidder who cannot afford that price is skipped and does not set the price for everyone else.
 - The price is reserved when the ad is served and spent only when the challenge verifies. Failed and expired challenges release the reserve.
 
-The split is integer division. The developer gets `floor(price / 2)`. The platform keeps the remainder, so a 51¢ impression pays 25¢ and 26¢. Payouts require a verified balance of at least $10 (1000 cents).
+The developer share is one parameter, `SWAG_DEVELOPER_SHARE_BPS`, default `5000` (50%). The developer gets `floor(price * bps / 10000)`. The platform keeps the remainder, so a 51¢ impression at 50% pays 25¢ and 26¢. At 70% (`7000`) the same impression pays 35¢ and 16¢. Payouts require a verified balance of at least $10 and are on demand. There is no two-week batch.
+
+Campaigns can restrict placement (`terminal`, `editor`, `browser`) and up to 20 country codes. An empty country list matches everyone. A listed country matches only a request that sends that code. The client does not look up IP.
+
+Advertisers can prepay blocks of 1,000 impression credits (minimum $0.50 per block) through `POST /v1/checkout`. Country targeting adds $0.75 per block to the mock invoice, not to the auction bid. Checkout in this build is a mock card charge.
 
 API credits convert the withdrawn cents at 110% (`amount + floor(amount / 10)`). $10 of earnings becomes $11 of credit. The bonus is credit value, not extra withdrawable cash.
 
-Stripe Connect, Solana, and Lightning implement the same `settlePayout` interface:
+Stripe Connect, Solana, Lightning, and UPI (RazorpayX) implement the same `settlePayout` interface:
 
 | Credentials | Mode | What happens |
 | --- | --- | --- |
 | Unset | mock | A local receipt id. No network call. |
-| Stripe `sk_test_…`, or Solana/Lightning endpoints set | sandbox | Receipt describes the transfer. Still no network call. |
-| Stripe `sk_live_…` | refused | This build will not use a live secret. |
+| Stripe `sk_test_…`, Solana/Lightning endpoints, or RazorpayX `rzp_test_…` | sandbox | Receipt describes the transfer. Still no network call. |
+| Stripe `sk_live_…` or RazorpayX `rzp_live_…` | refused | This build will not use a live secret. |
+
+UPI destinations are VPAs such as `ada@okaxis`. That rail exists so a developer in a country Stripe Connect does not pay is not stuck.
 
 No provider key is shipped in the repo. Leave the variables empty.
 
@@ -132,7 +140,18 @@ pnpm dev
 | Ada Okafor | ada@dev.swagmoney.test | 48 verified impressions, $12.00 balance, two rejected proofs |
 | Lin Zhao | lin@ads.swagmoney.test | Northwind (max 80¢) and Helio (max 50¢) clearing at 51¢, plus a paused campaign |
 
-On the landing page, use **I'm a developer** or **I'm an advertiser**. Those are local demo sessions, not accounts you can take anywhere.
+On the landing page, use **I'm a developer** or **I'm an advertiser**. Those are local demo sessions. The same accounts also log in at `/login` with the local fixture password `swag-demo`. Sign-up at `/signup` creates a scrypt-hashed password. Neither is a production identity system.
+
+Detect installed tools and write official config:
+
+```bash
+pnpm swag-money
+pnpm swag-money apply
+```
+
+`pnpm swag-money` is the in-repo form of `npx swag-money`. This repository does not publish the package.
+
+Public pages: `/` (ledger strip from `GET /v1/public/stats`), `/integrations`, `/install` and `/install/[tool]`, `/advertise` (mock block checkout), `/surface-pricing`, `/api-docs`, `/faq`, `/login`, `/signup`, `/terms`, `/privacy`, `/privacy-choices`, `/security`.
 
 Claude Code, end to end, against that API:
 
@@ -157,11 +176,26 @@ pnpm --filter @swag-money/claude-code restore --settings ~/.claude/settings.json
 
 Copy `.env.example` to `.env` only if you want to override ports or provider modes. Empty secrets mean "generate locally" or "stay in mock mode".
 
-## Adapters that are scaffolds
+## Integration status
 
-- **VS Code / Cursor / Windsurf.** `packages/adapters/vscode` is a real extension that uses the status bar as the render surface. `pnpm --filter @swag-money/vscode build` emits `dist/extension.js`. Set `swagMoney.installId`, `swagMoney.devicePrivateKey`, and `swagMoney.pinnedPublicKey`, then run **Swag-Money: Show a signed ad in the status bar**. Cursor and Windsurf load this the same way they load any VS Code extension. It does not modify CSP.
-- **Browser.** `packages/adapters/browser` is a Manifest V3 extension. Load the folder unpacked after `pnpm --filter @swag-money/browser build`. Options store the device key locally. The content script looks for `#swag-money-slot` or a thinking label on chatgpt.com and claude.ai and sets `textContent` only.
-- **JetBrains.** `createJetBrainsSurface()` throws `AdapterNotImplementedError`. `plugin.xml` and `SwagMoneyRenderSurface.kt` are the contract for a future plugin, not a working IDE integration.
+Statuses are honest about what ran in this environment.
+
+| Tool | Status | Mechanism |
+| --- | --- | --- |
+| Claude Code CLI | working | `spinnerVerbs` impression loop is demonstrated. Installer also writes `spinnerTipsOverride` with label `Sponsored` and a `statusLine` script. The Claude binary was not required for the verb path. |
+| Claude Code in VS Code | beta | Same settings file, per Anthropic’s docs. The extension was not installed here. We do not patch it or its CSP. |
+| Codex CLI | beta | Hooks for turn start/stop. The hook script does not read stdin. No custom spinner API. |
+| Gemini CLI, Qwen Code | beta | `ui.customWittyPhrases`. Config merge is unit-tested. Binaries were not run. |
+| Copilot CLI | beta | Experimental `statusLine` command. |
+| Antigravity CLI | beta | `statusLine` script reads stdin only for `agent_state`, then discards the object. |
+| VS Code, Cursor, Windsurf, Cline, Kiro | beta | Status-bar extension (`swagMoney.surface`) plus hook JSON writers. The extension typechecks. It was not loaded in an editor here. |
+| ChatGPT, Claude.ai, Gemini, Grok, Perplexity, DeepSeek, Mistral Le Chat, v0, Bolt, Lovable, Replit | beta | MV3 content script. Host selectors are unit-tested against a fake DOM. Live sites were not driven. |
+| OpenCode, Kilo, Goose | scaffold | Plugin or status-hook source is written. The host does not load it. |
+| JetBrains | scaffold | `plugin.xml` registers `StatusBarWidgetFactory`. The Kotlin widget throws. Not compiled against the IntelliJ SDK. |
+
+`pnpm --filter @swag-money/vscode build` emits `dist/extension.js`. `pnpm --filter @swag-money/browser build` emits the content script. Load the browser folder unpacked. It sets `textContent` only and does not change page CSP.
+
+Advertiser API keys (`sm_test_…`) authorize `POST /v1/checkout`, `GET /v1/advertiser/v1/campaigns`, and `GET /v1/advertiser/v1/stats`. Missing and unknown keys get 401. The destination URL is stored for the advertiser and is absent from the signed ad payload.
 
 ## Tests
 
@@ -176,11 +210,12 @@ Coverage is the logic the product claims, not a screenshot of the UI:
 - Render transcripts: five-second span, mismatched read-back, device signature.
 - The client refuses to write a string whose signature does not match the pinned key.
 - English auction: second price, reserve, ties, targeting, bidders who cannot afford the price.
-- 50/50 split including the odd cent, the $10 gate, and the 10% credit bonus.
+- 50/50 split including the odd cent, a 70% basis-point override, the $10 gate, and the 10% credit bonus.
+- Country and placement targeting, block quotes, UPI destination checks, signup, checkout, and API-key auth.
 - HTTP: a full render against the API pays once; an immediate scripted verify does not; a replay does not; a signed mismatched read-back releases budget.
 
 ## What is real and what is mocked
 
-Real in this repo: Ed25519 sign and verify, the string-only parser, the Claude Code settings backup and restore, the English auction, reservation and the 50/50 ledger, the five-second server clock, device-signed render transcripts, the $10 threshold, and the 10% credit math.
+Real in this repo: Ed25519 sign and verify, the string-only parser, the Claude Code settings backup and restore, the English auction, placement and country filters, reservation and the configurable ledger split, the five-second server clock, device-signed render transcripts, the $10 on-demand threshold, the 10% credit math, scrypt passwords, and API-key hashes.
 
-Mocked or sandbox-only: Stripe transfers, Solana broadcasts, Lightning payments, and the actual grant of Anthropic or OpenAI credit. Demo login is a signed local cookie, not a production identity system. There is no hardware proof of what was on the screen.
+Mocked or sandbox-only: Stripe transfers, Solana broadcasts, Lightning payments, RazorpayX UPI payouts, card checkout, and the actual grant of Anthropic or OpenAI credit. There is no hardware proof of what was on the screen. The homepage counter is the ledger query, not a baked-in total.

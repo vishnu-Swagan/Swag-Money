@@ -9,6 +9,9 @@ package ai.swagmoney
  * and refuse any payload that is not a signed string. It must not download
  * or execute code from the Swag-Money API.
  */
+/** Registered from plugin.xml. Not compiled against the IntelliJ SDK in this repo. */
+class SwagStatusWidgetFactory
+
 class SwagMoneyRenderSurface {
     fun write(text: String) {
         throw NotImplementedError("JetBrains RenderSurface.write is a stub")

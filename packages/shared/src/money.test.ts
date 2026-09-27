@@ -22,6 +22,13 @@ describe('revenue split', () => {
     expect(() => splitRevenue(1.5)).toThrow(DomainError)
     expect(() => splitRevenue(-1)).toThrow(DomainError)
   })
+
+  it('uses one basis-point parameter, defaulting to 50%', () => {
+    expect(splitRevenue(100)).toEqual({ developerCents: 50, platformCents: 50 })
+    expect(splitRevenue(100, 7000)).toEqual({ developerCents: 70, platformCents: 30 })
+    expect(splitRevenue(51, 7000)).toEqual({ developerCents: 35, platformCents: 16 })
+    expect(() => splitRevenue(100, 10001)).toThrow(DomainError)
+  })
 })
 
 describe('payout threshold and API credits', () => {

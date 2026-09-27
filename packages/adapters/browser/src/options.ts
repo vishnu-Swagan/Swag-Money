@@ -1,5 +1,5 @@
 const form = document.querySelector('#config')
-const status = document.querySelector('#status')
+const statusNode = document.querySelector('#status')
 
 async function restore() {
   const config = await chrome.storage.local.get(['apiUrl', 'installId', 'privateKey', 'pin'])
@@ -24,7 +24,7 @@ form?.addEventListener('submit', (event) => {
       pin: String(data.get('pin') ?? ''),
     })
     .then(() => {
-      if (status) status.textContent = 'Saved locally. Nothing was uploaded except what the content script signs.'
+      if (statusNode) statusNode.textContent = 'Saved locally. Nothing was uploaded except what the content script signs.'
     })
 })
 

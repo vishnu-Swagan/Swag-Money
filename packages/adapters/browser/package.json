@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@swag-money/client-core": "workspace:*",
-    "@swag-money/crypto": "workspace:*"
+    "@swag-money/crypto": "workspace:*",
+    "@swag-money/shared": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.25.5"

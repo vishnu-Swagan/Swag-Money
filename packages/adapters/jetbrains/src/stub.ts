@@ -10,7 +10,7 @@ export class AdapterNotImplementedError extends Error {
 }
 
 const MESSAGE =
-  'The JetBrains adapter is a stub. A plugin should implement RenderSurface by writing the verified string into the status bar, reading it back for the render challenge, and restoring the previous text. It must not download bytecode or widen the IDE sandbox.'
+  'The JetBrains runtime is not built in this repo. plugin.xml registers a StatusBarWidgetFactory and SwagMoneyRenderSurface.kt sketches the text contract. It must write only the verified string, read that widget text back, and must not download bytecode or widen the IDE sandbox.'
 
 /** Shared-core placeholder so the JetBrains plugin has a typed contract to implement. */
 export function createJetBrainsSurface(): RenderSurface {

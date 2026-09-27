@@ -13,6 +13,8 @@ type Summary = {
   rejectedImpressions: number
   pendingImpressions: number
   lifetimeEarnedCents: number
+  developerShareBps?: number
+  payoutSchedule?: string
   serverPublicKey: { fingerprint: string; publicKey: string }
   installs: Array<{ id: string; label: string; fingerprint: string }>
   payouts: Array<{
@@ -99,7 +101,7 @@ export default async function DevelopersPage({
           <div>
             <p className="kicker">Developer ledger</p>
             <h1>{data.user.name}</h1>
-            <p className="who">{data.user.email} · payouts open at {formatUsd(data.payoutMinCents)}</p>
+            <p className="who">{data.user.email} · on-demand payouts open at {formatUsd(data.payoutMinCents)} · share {((data.developerShareBps ?? 5000) / 100).toFixed(0)}%</p>
           </div>
           <DemoSwitch />
         </div>
@@ -122,7 +124,7 @@ export default async function DevelopersPage({
                   <th>Surface</th>
                   <th>Line</th>
                   <th>Status</th>
-                  <th>Your half</th>
+                  <th>Your share</th>
                 </tr>
               </thead>
               <tbody>
@@ -144,7 +146,7 @@ export default async function DevelopersPage({
           <div>
             <section className="panel">
               <h2>Request a payout</h2>
-              <p className="tiny">Minimum {formatUsd(PAYOUT_MIN_CENTS)}. API credits add 10%. Stripe, Solana, and Lightning receipts are mock or sandbox and do not leave this machine.</p>
+              <p className="tiny">Minimum {formatUsd(PAYOUT_MIN_CENTS)}, paid on demand. There is no two-week batch. API credits add 10%. UPI is a mock RazorpayX receipt for developers Stripe Connect does not pay. Nothing leaves this machine.</p>
               <form action={requestPayout}>
                 <label htmlFor="amount">Amount in dollars</label>
                 <input id="amount" name="amount" defaultValue={ready ? (data.balanceCents / 100).toFixed(2) : '10.00'} />
@@ -154,10 +156,11 @@ export default async function DevelopersPage({
                   <option value="stripe_connect">Stripe Connect</option>
                   <option value="solana">Solana</option>
                   <option value="lightning">Lightning</option>
+                  <option value="upi">UPI (RazorpayX)</option>
                 </select>
                 <label htmlFor="destination">Destination</label>
                 <input id="destination" name="destination" defaultValue="anthropic" />
-                <p className="tiny">Use acct_12345678, a Solana address, a Lightning address, or anthropic / openai / oss.</p>
+                <p className="tiny">Use acct_12345678, a Solana address, a Lightning address, a UPI id such as ada@okaxis, or anthropic / openai / oss.</p>
                 <button className="button" type="submit" disabled={!ready}>
                   {ready ? 'Request payout' : `Need ${formatUsd(data.payoutMinCents - data.balanceCents)} more`}
                 </button>

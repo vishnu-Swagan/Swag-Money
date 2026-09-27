@@ -5,6 +5,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   role: text('role').notNull(),
+  passwordHash: text('password_hash').notNull().default(''),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
@@ -28,6 +29,34 @@ export const campaigns = pgTable('campaigns', {
   spentCents: integer('spent_cents').notNull(),
   reservedCents: integer('reserved_cents').notNull(),
   surfaces: text('surfaces').notNull(),
+  placement: text('placement').notNull().default('any'),
+  countries: text('countries').notNull().default('[]'),
+  destinationUrl: text('destination_url').notNull().default(''),
+  impressionCredits: integer('impression_credits').notNull().default(0),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const apiKeys = pgTable('api_keys', {
+  id: text('id').primaryKey(),
+  advertiserId: text('advertiser_id').notNull(),
+  prefix: text('prefix').notNull(),
+  keyHash: text('key_hash').notNull(),
+  label: text('label').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+  revokedAtMs: bigint('revoked_at_ms', { mode: 'number' }),
+})
+
+export const checkouts = pgTable('checkouts', {
+  id: text('id').primaryKey(),
+  advertiserId: text('advertiser_id').notNull(),
+  campaignId: text('campaign_id').notNull(),
+  blocks: integer('blocks').notNull(),
+  bidPerBlockCents: integer('bid_per_block_cents').notNull(),
+  countrySurchargeCents: integer('country_surcharge_cents').notNull(),
+  totalCents: integer('total_cents').notNull(),
+  status: text('status').notNull(),
+  provider: text('provider').notNull(),
+  mode: text('mode').notNull(),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 

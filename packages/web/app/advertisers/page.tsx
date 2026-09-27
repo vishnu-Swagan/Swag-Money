@@ -1,4 +1,5 @@
-import { formatUsd } from '@swag-money/shared'
+import { formatUsd, SURFACES } from '@swag-money/shared'
+import Link from 'next/link'
 import { DemoSwitch, SiteNav } from '../../components/nav'
 import { apiJson } from '../../lib/api'
 import { createCampaign, updateCampaign } from '../actions'
@@ -31,8 +32,6 @@ type Campaign = {
   verifiedImpressions: number
   pendingImpressions: number
 }
-
-const SURFACES = ['claude-code', 'vscode', 'browser', 'jetbrains'] as const
 
 export default async function AdvertisersPage({
   searchParams,
@@ -87,13 +86,14 @@ export default async function AdvertisersPage({
           <div>
             <p className="kicker">Advertiser desk</p>
             <h1>English auction</h1>
-            <p className="who">You set a max bid. You pay the second price plus one cent, and only after a verified render.</p>
+            <p className="who">You set a max bid. You pay the second price plus one cent, and only after a verified render. <Link href="/advertise">Buy impression blocks</Link> when you want placement and country targeting.</p>
           </div>
           <DemoSwitch />
         </div>
         {query.error ? <p className="banner error">{query.error}</p> : null}
         {query.notice === 'campaign' ? <p className="banner ok">Campaign is live and can win the next wait state.</p> : null}
         {query.notice === 'bid' ? <p className="banner ok">Bid updated. The next impression uses the new max.</p> : null}
+        {query.notice === 'checkout' ? <p className="banner ok">Mock checkout recorded. The block budget is in the auction. No card network was contacted.</p> : null}
         <section className="panel">
           <h2>Clearing right now</h2>
           <div className="stats">
@@ -176,7 +176,7 @@ export default async function AdvertisersPage({
             <div className="checks">
               {SURFACES.map((surface) => (
                 <label key={surface}>
-                  <input type="checkbox" name="surfaces" value={surface} defaultChecked={surface !== 'jetbrains'} />
+                  <input type="checkbox" name="surfaces" value={surface} defaultChecked={surface === 'claude-code' || surface === 'vscode' || surface === 'browser'} />
                   {surface}
                 </label>
               ))}

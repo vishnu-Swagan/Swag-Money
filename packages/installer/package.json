@@ -1,0 +1,21 @@
+{
+  "name": "@swag-money/install",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "swag-money": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/detect.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@swag-money/integrations": "workspace:*",
+    "@swag-money/shared": "workspace:*"
+  }
+}

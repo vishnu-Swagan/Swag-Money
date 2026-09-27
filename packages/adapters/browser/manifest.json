@@ -7,7 +7,17 @@
   "host_permissions": [
     "http://127.0.0.1:8787/*",
     "https://chatgpt.com/*",
-    "https://claude.ai/*"
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://grok.com/*",
+    "https://perplexity.ai/*",
+    "https://www.perplexity.ai/*",
+    "https://chat.deepseek.com/*",
+    "https://chat.mistral.ai/*",
+    "https://v0.dev/*",
+    "https://bolt.new/*",
+    "https://lovable.dev/*",
+    "https://replit.com/*"
   ],
   "background": {
     "service_worker": "dist/background.js"
@@ -18,7 +28,20 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://grok.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://chat.deepseek.com/*",
+        "https://chat.mistral.ai/*",
+        "https://v0.dev/*",
+        "https://bolt.new/*",
+        "https://lovable.dev/*",
+        "https://replit.com/*"
+      ],
       "js": ["dist/content.js"],
       "run_at": "document_idle"
     }

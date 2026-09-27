@@ -40,6 +40,12 @@
           "type": "string",
           "default": "",
           "description": "Pinned server Ed25519 public key, base64url. Not read from the ad response."
+        },
+        "swagMoney.surface": {
+          "type": "string",
+          "default": "vscode",
+          "enum": ["vscode", "cursor", "windsurf", "cline", "kiro"],
+          "description": "Auction surface this editor reports. The extension still only writes its own status-bar item."
         }
       }
     }

@@ -29,6 +29,9 @@ importers:
       '@swag-money/crypto':
         specifier: workspace:*
         version: link:../../crypto
+      '@swag-money/shared':
+        specifier: workspace:*
+        version: link:../../shared
     devDependencies:
       esbuild:
         specifier: ^0.25.5
@@ -113,6 +116,17 @@ importers:
       '@swag-money/shared':
         specifier: workspace:*
         version: link:../shared
+
+  packages/installer:
+    dependencies:
+      '@swag-money/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@swag-money/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/integrations: {}
 
   packages/shared: {}
 

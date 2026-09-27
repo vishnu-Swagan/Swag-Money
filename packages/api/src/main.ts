@@ -3,11 +3,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bytesToB64Url, fingerprint } from '@swag-money/crypto'
-import { IMPRESSION_TTL_MS, MIN_VIEW_MS, PAYOUT_MIN_CENTS } from '@swag-money/shared'
+import { DEFAULT_DEVELOPER_SHARE_BPS, IMPRESSION_TTL_MS, MIN_VIEW_MS, PAYOUT_MIN_CENTS } from '@swag-money/shared'
 import { createApp } from './app.ts'
 import { openDatabase } from './db.ts'
 import { loadSessionSecret, loadSigningKey } from './keys.ts'
-import { DEMO_ADVERTISER, DEMO_DEVELOPER, seedIfEmpty } from './seed.ts'
+import { DEMO_ADVERTISER, DEMO_DEVELOPER, DEMO_PASSWORD, ensureDemoPasswords, seedIfEmpty } from './seed.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 loadDotEnv(path.join(repoRoot, '.env'))
@@ -20,6 +20,7 @@ const sessionSecret = loadSessionSecret(dataDir, process.env.SWAG_SESSION_SECRET
 const database = await openDatabase(path.join(dataDir, 'pg'))
 const clock = { now: () => Date.now() }
 await seedIfEmpty(database.db, clock.now())
+await ensureDemoPasswords(database.db)
 
 const app = createApp({
   db: database.db,
@@ -31,6 +32,7 @@ const app = createApp({
     minViewMs: intEnv('SWAG_MIN_VIEW_MS', MIN_VIEW_MS),
     payoutMinCents: intEnv('SWAG_PAYOUT_MIN_CENTS', PAYOUT_MIN_CENTS),
     impressionTtlMs: intEnv('SWAG_IMPRESSION_TTL_MS', IMPRESSION_TTL_MS),
+    developerShareBps: intEnv('SWAG_DEVELOPER_SHARE_BPS', DEFAULT_DEVELOPER_SHARE_BPS),
     sessionSecret,
     stripeSecretKey: emptyToUndefined(process.env.STRIPE_SECRET_KEY),
     solanaRpcUrl: emptyToUndefined(process.env.SOLANA_RPC_URL),
@@ -39,6 +41,8 @@ const app = createApp({
     lightningMacaroon: emptyToUndefined(process.env.LIGHTNING_MACAROON),
     openaiApiKey: emptyToUndefined(process.env.OPENAI_API_KEY),
     anthropicApiKey: emptyToUndefined(process.env.ANTHROPIC_API_KEY),
+    razorpayxKeyId: emptyToUndefined(process.env.RAZORPAYX_KEY_ID),
+    razorpayxKeySecret: emptyToUndefined(process.env.RAZORPAYX_KEY_SECRET),
   },
 })
 
@@ -48,6 +52,8 @@ serve({ fetch: app.fetch, port }, () => {
   console.log(`Public key ${bytesToB64Url(signing.publicKey)}`)
   console.log(`Demo developer ${DEMO_DEVELOPER.email}`)
   console.log(`Demo advertiser ${DEMO_ADVERTISER.email}`)
+  console.log(`Demo password ${DEMO_PASSWORD} (local fixture, not a production secret)`)
+  console.log(`Developer share ${intEnv('SWAG_DEVELOPER_SHARE_BPS', DEFAULT_DEVELOPER_SHARE_BPS)} bps`)
 })
 
 function intEnv(name: string, fallback: number): number {

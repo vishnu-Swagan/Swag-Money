@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { runImpression, type RenderSurface } from '@swag-money/client-core'
 import { b64UrlToBytes } from '@swag-money/crypto'
+import { editorSurface } from './surface-id.ts'
 
 /**
  * VS Code-family adapter (VS Code, Cursor, Windsurf).
@@ -23,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
       void vscode.window.showWarningMessage('Set swagMoney.installId, devicePrivateKey, and pinnedPublicKey first.')
       return
     }
-    const surface = new StatusBarSurface(item)
+    const surface = new StatusBarSurface(item, editorSurface(config.get<string>('surface')))
     try {
       const result = await runImpression({
         apiUrl,
@@ -48,10 +49,15 @@ export function deactivate() {
 }
 
 class StatusBarSurface implements RenderSurface {
-  readonly kind = 'vscode' as const
+  readonly kind: RenderSurface['kind']
   private previous = ''
 
-  constructor(private readonly item: vscode.StatusBarItem) {}
+  constructor(
+    private readonly item: vscode.StatusBarItem,
+    kind: RenderSurface['kind'],
+  ) {
+    this.kind = kind
+  }
 
   write(text: string) {
     this.previous = this.item.text

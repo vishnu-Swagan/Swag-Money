@@ -1,5 +1,19 @@
-import { SiteNav } from '../components/nav'
+import { formatUsd } from '@swag-money/shared'
+import { CopyCommand } from '../components/copy-command'
+import { SiteFooter, SiteNav } from '../components/nav'
+import { API_URL } from '../lib/api'
 import { signIn } from './actions'
+
+export const dynamic = 'force-dynamic'
+
+type PublicStats = {
+  verifiedImpressions: number
+  developerEarningsCents: number
+  paidOutCents: number
+  developerCount: number
+  developerShareBps: number
+  source: string
+}
 
 const DEVELOPER = 'ada@dev.swagmoney.test'
 const ADVERTISER = 'lin@ads.swagmoney.test'
@@ -10,6 +24,7 @@ export default async function HomePage({
   searchParams: Promise<{ error?: string }>
 }) {
   const query = await searchParams
+  const stats = await loadStats()
   return (
     <>
       <SiteNav />
@@ -19,10 +34,13 @@ export default async function HomePage({
             <p className="kicker">Developer-tool ad marketplace</p>
             <h1>Signed ads for the seconds your AI <em>spends thinking.</em></h1>
             <p className="dek">
-              Swag-Money sells one line of B2B copy into the wait state of Claude Code, Cursor, and chat assistants.
-              Advertisers bid in an English auction. The developer whose machine actually rendered the line earns half.
-              The client never downloads code.
+              Swag-Money sells one line of B2B copy into the wait state of the coding tools you already run.
+              Advertisers bid in an English auction. The developer whose machine rendered the line earns the configured share, 50% unless you change it.
+              The client never downloads code, and it never reads your prompts.
             </p>
+            <LedgerStrip stats={stats} />
+            <CopyCommand command="pnpm swag-money" />
+            <p className="tiny">Detects installed tools and writes their official config. The same binary is <span className="mono">npx swag-money</span> once the package is published. This repo does not publish it for you.</p>
             {query.error === 'api' ? <p className="banner error">Start the API with <span className="mono">pnpm dev</span> and try the demo accounts again.</p> : null}
             {query.error === 'demo' ? <p className="banner error">That demo account is not in the local database.</p> : null}
             <div className="cta-row">
@@ -61,7 +79,7 @@ export default async function HomePage({
             </dl>
             <footer>
               <span>Odd cent stays with the platform</span>
-              <span>50 / 50</span>
+              <span>{stats ? `${(stats.developerShareBps / 100).toFixed(0)}% share` : '50% share'}</span>
             </footer>
             <div className="perf" aria-hidden="true" />
           </aside>
@@ -87,12 +105,12 @@ export default async function HomePage({
             <article className="card">
               <div className="idx">03 · Every surface</div>
               <h3>One core, many hosts.</h3>
-              <p>A shared client core plus adapters. Claude Code ships working. VS Code, Cursor, and Windsurf share a status-bar scaffold. ChatGPT and Claude web have a content script. JetBrains is an explicit stub.</p>
+              <p>One client core. Claude Code CLI is working. Editors, Gemini-family CLIs, and browser wait states are beta. OpenCode, Kilo, Goose, and JetBrains are scaffolds. The directory says which is which.</p>
             </article>
             <article className="card">
               <div className="idx">04 · How you get paid</div>
               <h3>Not only Stripe.</h3>
-              <p>Stripe Connect, Solana, and Lightning sit behind one payout interface. Or convert earnings to Anthropic, OpenAI, or open-source API credits with a 10% bonus.</p>
+              <p>Stripe Connect, Solana, Lightning, UPI, or API credits with a 10% bonus. Payouts are on demand once the balance clears $10.</p>
             </article>
           </div>
         </section>
@@ -126,7 +144,7 @@ export default async function HomePage({
               <tr>
                 <td>Payout rails</td>
                 <td>Stripe Connect countries only</td>
-                <td>Stripe, Solana, Lightning, or API credits at 110%.</td>
+                <td>Stripe, Solana, Lightning, UPI, or API credits at 110%. On demand at $10.</td>
               </tr>
             </tbody>
           </table>
@@ -159,7 +177,7 @@ export default async function HomePage({
         </section>
 
         <section className="wrap band" id="payouts">
-          <h2>Half the clearing price, once you cross $10.</h2>
+          <h2>Your share of the clearing price, on demand past $10.</h2>
           <div className="grid-2">
             <article className="card">
               <div className="idx">Developers</div>
@@ -167,7 +185,7 @@ export default async function HomePage({
               <ul>
                 <li>Install the Claude Code adapter. It backs up <span className="mono">spinnerVerbs</span> and restores the original bytes.</li>
                 <li>Verified impressions show up with the price and your half.</li>
-                <li>Payouts open at $10 via Stripe Connect, Solana, Lightning, or API credits.</li>
+                <li>Payouts open at $10, on demand, via Stripe Connect, Solana, Lightning, UPI, or API credits.</li>
               </ul>
             </article>
             <article className="card">
@@ -207,10 +225,52 @@ export default async function HomePage({
           </div>
         </section>
       </main>
-      <footer className="wrap site-footer">
-        <span>Swag-Money · swagmoney.ai</span>
-        <span>Local demo · no production keys in this repo</span>
-      </footer>
+      <SiteFooter />
     </>
+  )
+}
+
+async function loadStats(): Promise<PublicStats | null> {
+  try {
+    const response = await fetch(`${API_URL}/v1/public/stats`, { cache: 'no-store' })
+    if (!response.ok) return null
+    const body = (await response.json()) as PublicStats
+    if (body.source !== 'ledger' || !Number.isInteger(body.verifiedImpressions)) return null
+    return body
+  } catch {
+    return null
+  }
+}
+
+function LedgerStrip({ stats }: { stats: PublicStats | null }) {
+  if (!stats) {
+    return (
+      <div className="ledger-strip" aria-label="Ledger status">
+        <article>
+          <b>Offline</b>
+          <span>Ledger unreachable. No number is shown in its place.</span>
+        </article>
+      </div>
+    )
+  }
+  return (
+    <div className="ledger-strip" aria-label="Live ledger totals">
+      <article>
+        <b>{stats.verifiedImpressions.toLocaleString('en-US')}</b>
+        <span>Verified impressions</span>
+      </article>
+      <article>
+        <b>{formatUsd(stats.developerEarningsCents)}</b>
+        <span>Developer earnings</span>
+      </article>
+      <article>
+        <b>{formatUsd(stats.paidOutCents)}</b>
+        <span>Paid out</span>
+      </article>
+      <article>
+        <b>{stats.developerCount.toLocaleString('en-US')}</b>
+        <span>Developers on this ledger</span>
+      </article>
+    </div>
   )
 }
