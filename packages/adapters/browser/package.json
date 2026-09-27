@@ -1,0 +1,17 @@
+{
+  "name": "@swag-money/browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@swag-money/client-core": "workspace:*",
+    "@swag-money/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.5"
+  }
+}

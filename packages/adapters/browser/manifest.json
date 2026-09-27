@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Swag-Money",
+  "version": "0.1.0",
+  "description": "Replaces assistant wait-state text with one signed string. Does not relax page or extension CSP.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://127.0.0.1:8787/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

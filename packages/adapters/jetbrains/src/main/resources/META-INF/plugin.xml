@@ -1,0 +1,14 @@
+<idea-plugin>
+  <id>ai.swagmoney.jetbrains</id>
+  <name>Swag-Money</name>
+  <vendor>Swag-Money</vendor>
+  <description><![CDATA[
+    Stub for the JetBrains adapter. The implementation must use the shared
+    RenderSurface contract: display one verified string, read it back, restore
+    the previous status text. Do not add a remote script host or eval downloaded
+    bytecode. See SwagMoneyRenderSurface.kt.
+  ]]></description>
+  <depends>com.intellij.modules.platform</depends>
+  <extensions defaultExtensionNs="com.intellij">
+  </extensions>
+</idea-plugin>

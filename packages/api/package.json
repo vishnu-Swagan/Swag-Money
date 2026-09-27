@@ -1,0 +1,26 @@
+{
+  "name": "@swag-money/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "devDependencies": {
+    "@swag-money/client-core": "workspace:*"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.3",
+    "@hono/node-server": "^1.19.0",
+    "@swag-money/crypto": "workspace:*",
+    "@swag-money/shared": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "hono": "^4.9.6"
+  }
+}

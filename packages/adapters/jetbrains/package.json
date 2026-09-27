@@ -1,0 +1,16 @@
+{
+  "name": "@swag-money/jetbrains",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/stub.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@swag-money/client-core": "workspace:*"
+  }
+}
