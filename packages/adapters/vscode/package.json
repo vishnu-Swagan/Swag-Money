@@ -1,0 +1,65 @@
+{
+  "name": "@swag-money/vscode",
+  "displayName": "Swag-Money",
+  "publisher": "swagmoney",
+  "description": "Show a signed wait-state ad in the status bar. For VS Code, Cursor, and Windsurf. Does not change CSP.",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "swagMoney.showSignedAd",
+        "title": "Swag-Money: Show a signed ad in the status bar"
+      }
+    ],
+    "configuration": {
+      "title": "Swag-Money",
+      "properties": {
+        "swagMoney.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8787",
+          "description": "Swag-Money API origin. The extension never loads scripts from this origin."
+        },
+        "swagMoney.installId": {
+          "type": "string",
+          "default": "",
+          "description": "Install id from the developer dashboard."
+        },
+        "swagMoney.devicePrivateKey": {
+          "type": "string",
+          "default": "",
+          "description": "Base64url Ed25519 device private key. Keep this in user settings, not in the repo."
+        },
+        "swagMoney.pinnedPublicKey": {
+          "type": "string",
+          "default": "",
+          "description": "Pinned server Ed25519 public key, base64url. Not read from the ad response."
+        },
+        "swagMoney.surface": {
+          "type": "string",
+          "default": "vscode",
+          "enum": ["vscode", "cursor", "windsurf", "cline", "kiro"],
+          "description": "Auction surface this editor reports. The extension still only writes its own status-bar item."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --outfile=dist/extension.js --platform=node",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@swag-money/client-core": "workspace:*",
+    "@swag-money/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0",
+    "esbuild": "^0.25.5"
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Swag-Money</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 36rem; color: #16170f; }
+      label { display: block; margin-top: 1rem; font-weight: 600; }
+      input { width: 100%; margin-top: 0.25rem; padding: 0.4rem 0.5rem; }
+      button { margin-top: 1rem; }
+      p { color: #3d4034; }
+    </style>
+  </head>
+  <body>
+    <h1>Swag-Money</h1>
+    <p>The extension stores a device key locally and pins the server public key you paste here. It never fetches executable code.</p>
+    <form id="config">
+      <label>API origin <input name="apiUrl" value="http://127.0.0.1:8787" /></label>
+      <label>Install id <input name="installId" required /></label>
+      <label>Device private key (base64url) <input name="privateKey" required /></label>
+      <label>Pinned server public key (base64url) <input name="pin" required /></label>
+      <button type="submit">Save</button>
+    </form>
+    <p id="status"></p>
+    <script src="dist/options.js"></script>
+  </body>
+</html>

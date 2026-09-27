@@ -1,0 +1,17 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+data
+.env
+.env.local
+.env.*.local
+*.log
+swag-device.json
+*.device.json
+*.swag-backup.json
+.DS_Store
+*.tsbuildinfo
+packages/adapters/browser/dist
+packages/adapters/vscode/dist
