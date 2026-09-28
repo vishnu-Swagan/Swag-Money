@@ -44,18 +44,18 @@ Generate the two secrets on your machine, from a checkout of this repo:
 
 ```bash
 pnpm install
-pnpm keys
+pnpm -s keys
 ```
 
-The command prints `SWAG_SIGNING_PRIVATE_KEY` and `SWAG_SESSION_SECRET` to the terminal. It does not write a file. Paste each value into Vercel. Do not commit them. Do not put them in GitHub Actions.
+`pnpm -s keys` prints only two lines, `SWAG_SIGNING_PRIVATE_KEY` and `SWAG_SESSION_SECRET`. It does not write a file. Paste each value into Vercel. Do not commit them. Do not put them in GitHub Actions. Use `-s` so pnpm's own log lines are not mixed into the secrets.
 
 In **Settings → Environment Variables**, add these for Production, Preview, and Build:
 
 | Name | Value |
 | --- | --- |
 | `DATABASE_URL` | Pooled Neon or Supabase URL, from the integration |
-| `SWAG_SIGNING_PRIVATE_KEY` | Line printed by `pnpm keys` |
-| `SWAG_SESSION_SECRET` | Line printed by `pnpm keys` |
+| `SWAG_SIGNING_PRIVATE_KEY` | Line printed by `pnpm -s keys` |
+| `SWAG_SESSION_SECRET` | Line printed by `pnpm -s keys` |
 | `SWAG_DEVELOPER_SHARE_BPS` | `5000` (50%). Any integer from 0 to 10000 |
 | `SWAG_PUBLIC_SITE_URL` | `https://swagmoney.ai` after the domain is attached. Until then, `https://<project>.vercel.app` |
 
@@ -108,7 +108,7 @@ export DATABASE_URL=postgres://...
 export SWAG_ENV=production
 export SWAG_DEVELOPER_SHARE_BPS=5000
 export SWAG_PUBLIC_SITE_URL=http://127.0.0.1:3000
-eval "$(pnpm keys | sed 's/^/export /')"
+eval "$(pnpm -s keys | sed 's/^/export /')"
 unset SWAG_API_URL
 pnpm db:migrate
 pnpm --filter @swag-money/web build

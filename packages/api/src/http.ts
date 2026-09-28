@@ -54,7 +54,7 @@ async function start(): Promise<App> {
   const signing = loadSigningKeyFromEnv(process.env.SWAG_SIGNING_PRIVATE_KEY)
   const sessionSecret = process.env.SWAG_SESSION_SECRET?.trim() ?? ''
   if (sessionSecret.length < 16 || sessionSecret === 'replace-with-a-long-random-string') {
-    throw new Error('SWAG_SESSION_SECRET must be at least 16 characters. Generate one with pnpm keys. See DEPLOY.md.')
+    throw new Error('SWAG_SESSION_SECRET must be at least 16 characters. Generate one with pnpm -s keys. See DEPLOY.md.')
   }
   return createApp({
     db,

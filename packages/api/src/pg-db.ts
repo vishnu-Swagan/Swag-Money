@@ -49,6 +49,7 @@ export async function ensureMigrated(): Promise<void> {
   const g = globalThis as GlobalPg
   if (g.__swagMigrated) return
   const sql = getSql()
+  await sql.unsafe('SET client_min_messages TO warning')
   for (const statement of migrationStatements()) {
     await sql.unsafe(statement)
   }

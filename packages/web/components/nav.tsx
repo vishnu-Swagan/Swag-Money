@@ -1,5 +1,6 @@
 import { signIn, signOut } from '../app/actions'
 import Link from 'next/link'
+import { demoAccountsEnabled } from '../lib/demo'
 
 const DEVELOPER = 'ada@dev.swagmoney.test'
 const ADVERTISER = 'lin@ads.swagmoney.test'
@@ -73,6 +74,13 @@ export function SiteFooter() {
 }
 
 export function DemoSwitch() {
+  if (!demoAccountsEnabled()) {
+    return (
+      <p>
+        <Link className="button" href="/login">Log in</Link>
+      </p>
+    )
+  }
   return (
     <div className="inline">
       <form action={signIn}>

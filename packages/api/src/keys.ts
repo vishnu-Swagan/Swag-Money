@@ -52,7 +52,7 @@ export function loadSigningKeyFromEnv(envPrivate: string | undefined): {
   const trimmed = envPrivate?.trim()
   if (!trimmed || trimmed === 'replace-me') {
     throw new Error(
-      'SWAG_SIGNING_PRIVATE_KEY is required when the API runs inside Next.js. Generate one with pnpm keys. See DEPLOY.md.',
+      'SWAG_SIGNING_PRIVATE_KEY is required when the API runs inside Next.js. Generate one with pnpm -s keys. See DEPLOY.md.',
     )
   }
   const privateKey = b64UrlToBytes(trimmed)

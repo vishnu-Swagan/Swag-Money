@@ -27,6 +27,7 @@ if (!url.startsWith('postgres://') && !url.startsWith('postgresql://')) {
 
 const sql = postgres(url, { max: 1, prepare: false, idle_timeout: 20 })
 try {
+  await sql.unsafe('SET client_min_messages TO warning')
   for (const statement of migrationStatements()) {
     await sql.unsafe(statement)
   }

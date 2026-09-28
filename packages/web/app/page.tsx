@@ -4,6 +4,7 @@ import { BuyForm } from '../components/buy-form'
 import { CopyCommand } from '../components/copy-command'
 import { SiteFooter, SiteNav } from '../components/nav'
 import { api, apiJson } from '../lib/api'
+import { demoAccountsEnabled } from '../lib/demo'
 import { COMPARE_NOTE, COMPARE_ROWS } from '../lib/compare'
 import { signIn } from './actions'
 
@@ -47,16 +48,23 @@ export default async function HomePage({
             <p className="tiny">Detects installed tools and writes their official config. The same binary is <span className="mono">npx swag-money</span> once the package is published. This repo does not publish it for you.</p>
             {query.error === 'api' ? <p className="banner error">Start the API with <span className="mono">pnpm dev</span> and try the demo accounts again.</p> : null}
             {query.error === 'demo' ? <p className="banner error">That demo account is not in the local database.</p> : null}
-            <div className="cta-row">
-              <form action={signIn}>
-                <input type="hidden" name="email" value={DEVELOPER} />
-                <button className="button" type="submit">I&apos;m a developer</button>
-              </form>
-              <form action={signIn}>
-                <input type="hidden" name="email" value={ADVERTISER} />
-                <button className="button secondary" type="submit">I&apos;m an advertiser</button>
-              </form>
-            </div>
+            {demoAccountsEnabled() ? (
+              <div className="cta-row">
+                <form action={signIn}>
+                  <input type="hidden" name="email" value={DEVELOPER} />
+                  <button className="button" type="submit">I&apos;m a developer</button>
+                </form>
+                <form action={signIn}>
+                  <input type="hidden" name="email" value={ADVERTISER} />
+                  <button className="button secondary" type="submit">I&apos;m an advertiser</button>
+                </form>
+              </div>
+            ) : (
+              <div className="cta-row">
+                <Link className="button" href="/signup">Create an account</Link>
+                <Link className="button secondary" href="/advertise">Buy a block</Link>
+              </div>
+            )}
           </div>
           <aside className="receipt" aria-label="Example verified impression">
             <header>
