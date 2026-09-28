@@ -7,13 +7,14 @@ import { migrationStatements } from './migration-sql.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 loadDotEnv(path.join(repoRoot, '.env'))
+loadDotEnv(path.join(repoRoot, 'packages/web/.dev.vars'))
 
 const url = process.env.DATABASE_URL?.trim() ?? ''
 const required = isHosted() || process.env.SWAG_REQUIRE_DATABASE === '1'
 
 if (!url) {
   if (required) {
-    console.error('DATABASE_URL is required to migrate. See DEPLOY.md.')
+    console.error('DATABASE_URL is required to migrate. Migrations run in Node, not inside the Worker. See DEPLOY.md.')
     process.exit(1)
   }
   console.log('DATABASE_URL is unset; skipping migrations. Local dev uses the embedded database.')

@@ -1,15 +1,23 @@
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import postgres, { type Sql } from 'postgres'
-import { migrationStatements } from './migration-sql.ts'
+import { neonConfig, Pool } from '@neondatabase/serverless'
+import { drizzle as drizzleNeon } from 'drizzle-orm/neon-serverless'
+import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+import type { SwagDb } from './db.ts'
 import * as schema from './schema.ts'
 
-type GlobalPg = typeof globalThis & {
-  __swagSql?: Sql
-  __swagMigrated?: boolean
-  __swagPoolWarned?: boolean
+/**
+ * Query helper for the Worker. One connection per request, closed before the
+ * response returns. Migrations are not run here; use `pnpm db:migrate`.
+ *
+ * Neon hosts use @neondatabase/serverless over WebSocket (Workers have no TCP).
+ * localhost uses postgres.js so `pnpm preview` can talk to a Postgres on this machine.
+ * Optional Hyperdrive: the web layer copies HYPERDRIVE.connectionString onto DATABASE_URL first.
+ */
+export async function withDatabase<T>(fn: (db: SwagDb) => Promise<T>, env: NodeJS.ProcessEnv = process.env): Promise<T> {
+  const url = databaseUrl(env)
+  if (isLocalPostgres(url)) return withLocalPostgres(url, fn)
+  return withNeon(url, fn)
 }
-
-export type PgDb = PostgresJsDatabase<typeof schema>
 
 export function databaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   const url = env.DATABASE_URL?.trim() ?? ''
@@ -20,38 +28,33 @@ export function databaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   return url
 }
 
-function warnIfDirect(url: string) {
-  const g = globalThis as GlobalPg
-  if (g.__swagPoolWarned) return
-  g.__swagPoolWarned = true
-  if (/pooler|pgbouncer|:6543/i.test(url)) return
-  console.warn(
-    'DATABASE_URL does not look pooled (no "pooler" host, port 6543, or pgbouncer). On Vercel, use the Neon or Supabase pooled URL.',
-  )
+export function isLocalPostgres(url: string): boolean {
+  const host = new URL(url).hostname
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1'
 }
 
-export function getSql(env: NodeJS.ProcessEnv = process.env): Sql {
-  const g = globalThis as GlobalPg
-  if (!g.__swagSql) {
-    const url = databaseUrl(env)
-    warnIfDirect(url)
-    g.__swagSql = postgres(url, { max: 1, prepare: false, idle_timeout: 20 })
+async function withLocalPostgres<T>(url: string, fn: (db: SwagDb) => Promise<T>): Promise<T> {
+  const sql = postgres(url, { max: 1, prepare: false, idle_timeout: 5, connect_timeout: 10 })
+  try {
+    return await fn(drizzlePostgres(sql, { schema }) as unknown as SwagDb)
+  } finally {
+    await sql.end({ timeout: 5 })
   }
-  return g.__swagSql
 }
 
-export function openPostgres(env: NodeJS.ProcessEnv = process.env): PgDb {
-  return drizzle(getSql(env), { schema })
-}
-
-/** Idempotent. Safe on every cold start; the CLI migrate command is what the Vercel build runs. */
-export async function ensureMigrated(): Promise<void> {
-  const g = globalThis as GlobalPg
-  if (g.__swagMigrated) return
-  const sql = getSql()
-  await sql.unsafe('SET client_min_messages TO warning')
-  for (const statement of migrationStatements()) {
-    await sql.unsafe(statement)
+async function withNeon<T>(url: string, fn: (db: SwagDb) => Promise<T>): Promise<T> {
+  if (/pooler|pgbouncer|:6543/i.test(url)) {
+    console.warn(
+      'DATABASE_URL looks like a pooled Neon or PgBouncer URL. The serverless driver wants the direct Neon host, not the -pooler host.',
+    )
   }
-  g.__swagMigrated = true
+  const webSocket = (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
+  if (!webSocket) throw new Error('WebSocket is required for the Neon driver. See DEPLOY.md.')
+  neonConfig.webSocketConstructor = webSocket
+  const pool = new Pool({ connectionString: url, max: 1 })
+  try {
+    return await fn(drizzleNeon(pool, { schema }) as unknown as SwagDb)
+  } finally {
+    await pool.end()
+  }
 }

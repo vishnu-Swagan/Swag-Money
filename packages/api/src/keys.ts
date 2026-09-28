@@ -1,6 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { b64UrlToBytes, bytesToB64Url, generateEd25519KeyPair, publicKeyFromPrivate } from '@swag-money/crypto'
+import { loadSigningKeyFromEnv } from './keys-env.ts'
+
+export { loadSigningKeyFromEnv }
 
 export function loadSigningKey(dataDir: string, envPrivate: string | undefined): {
   privateKey: Uint8Array
@@ -42,24 +45,6 @@ export function loadSigningKey(dataDir: string, envPrivate: string | undefined):
     // Some filesystems ignore chmod. The file is still gitignored.
   }
   return generated
-}
-
-/** Production and the Next.js server read the seed from the environment and never write a key file. */
-export function loadSigningKeyFromEnv(envPrivate: string | undefined): {
-  privateKey: Uint8Array
-  publicKey: Uint8Array
-} {
-  const trimmed = envPrivate?.trim()
-  if (!trimmed || trimmed === 'replace-me') {
-    throw new Error(
-      'SWAG_SIGNING_PRIVATE_KEY is required when the API runs inside Next.js. Generate one with pnpm -s keys. See DEPLOY.md.',
-    )
-  }
-  const privateKey = b64UrlToBytes(trimmed)
-  if (privateKey.length !== 32) {
-    throw new Error('SWAG_SIGNING_PRIVATE_KEY must be a base64url 32-byte seed')
-  }
-  return { privateKey, publicKey: publicKeyFromPrivate(privateKey) }
 }
 
 export function loadSessionSecret(dataDir: string, envSecret: string | undefined): string {

@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/.next/**', '**/dist/**', 'data/**', '**/next-env.d.ts', '**/*.tsbuildinfo'],
+    ignores: ['**/node_modules/**', '**/.next/**', '**/.open-next/**', '**/.wrangler/**', '**/dist/**', 'data/**', '**/next-env.d.ts', '**/*.tsbuildinfo'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

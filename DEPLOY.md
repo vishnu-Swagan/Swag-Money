@@ -1,118 +1,173 @@
-# Deploy Swag-Money on Vercel
+# Deploy Swag-Money on Cloudflare Workers
 
-One Vercel project serves the Next.js site and the API. `/v1/...` is a Next.js route that calls the same Hono app the local API uses. You do not create a second project.
+One Worker serves the Next.js site and the API. `/v1/...` is a route inside that Worker. There is no second service and no Vercel project.
 
-After this, the owner still has to connect the GitHub repo, add Neon, paste four secrets, and point DNS. The repo cannot do those clicks.
+The Worker name is `swag-money`.
 
-## 1. Import the repository
+After this, you still connect the Cloudflare account, paste secrets, run migrations against Neon, and point `swagmoney.ai` at Cloudflare. The repo cannot do those clicks.
 
-1. Sign in at [vercel.com/new](https://vercel.com/new).
-2. Choose **Import Git Repository** and pick this GitHub repo.
-3. Framework Preset: **Next.js**. Vercel reads `packages/web/vercel.json` for the commands below. If the form shows different commands, replace them with these.
-4. **Root Directory**: `packages/web`. Click **Edit**, set it, and turn **on** “Include source files outside of the Root Directory in the Build Step”. The install step has to see the pnpm workspace at the repo root.
-5. Node.js version: **22.x** (also pinned by `packages/web/.node-version`).
-6. **Install Command**:
+Local `pnpm dev` is unchanged: embedded Postgres, demo users, port 3000. `pnpm preview` is the production build, running in workerd against `DATABASE_URL`.
 
-   ```bash
-   cd ../.. && corepack enable && corepack prepare pnpm@10.33.3 --activate && pnpm install --frozen-lockfile
-   ```
+## 1. Cloudflare account and API token
 
-7. **Build Command**:
+1. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com).
+2. Open **Workers & Pages**. If this account has never used Workers, accept the Workers free or paid plan. See the size and CPU notes at the bottom before you pick.
+3. Copy the **Account ID** from the Workers overview (right side). That value is `CLOUDFLARE_ACCOUNT_ID`.
+4. Open **My Profile → API Tokens → Create Token → Create Custom Token**.
+5. Permissions:
+   - Account / **Workers Scripts** / Edit
+   - Account / **Account Settings** / Read
+   - Zone / **Workers Routes** / Edit
+   - Zone / **DNS** / Edit
+   - Zone / **Zone** / Read
+6. Account resources: your account. Zone resources: **All zones** (the `swagmoney.ai` zone does not exist yet).
+7. Create the token and copy it once. That value is `CLOUDFLARE_API_TOKEN`.
 
-   ```bash
-   cd ../.. && corepack enable && corepack prepare pnpm@10.33.3 --activate && pnpm db:migrate && pnpm --filter @swag-money/web build
-   ```
+For GitHub Actions, add repository secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `DATABASE_URL` (the Neon URL). If the two Cloudflare secrets are missing, the deploy workflow skips and stays green. If they are set and `DATABASE_URL` is missing, the workflow stops before deploy and says so.
 
-8. **Output Directory**: leave the default. Next.js writes `packages/web/.next`.
-9. Do not set `SWAG_API_URL`.
+## 2. Create the Worker
 
-Do not deploy yet. The build runs migrations and fails until `DATABASE_URL` exists.
-
-## 2. Add Postgres (Neon)
-
-1. In the new project, open the **Storage** tab, or **Integrations → Browse Marketplace**.
-2. Choose **Neon** (Postgres) and accept the install. Create a database when asked.
-3. Neon adds `DATABASE_URL`. Use the **pooled** URL. The host contains `-pooler` (Neon) or the port is `6543` (Supabase transaction pooler). A direct URL works for a single long-lived server and will exhaust connections on Vercel.
-4. Open **Project → Settings → Environment Variables** and confirm `DATABASE_URL` is enabled for **Production**, **Preview**, and **Build**. The build command runs `pnpm db:migrate`. If Build is unchecked, the deploy fails with `DATABASE_URL is required to migrate`.
-5. Supabase is the same variable: paste the transaction-pooler URI into `DATABASE_URL` for Production, Preview, and Build. Do not also run the local PGlite files in production.
-
-`pnpm db:migrate` applies `packages/api/src/migration-sql.ts`. The SQL is idempotent (`IF NOT EXISTS`). The first request on a cold isolate runs it again. There is no separate migration host.
-
-## 3. Environment variables
-
-Generate the two secrets on your machine, from a checkout of this repo:
+From a checkout, with the token in the environment if you deploy from a laptop:
 
 ```bash
 pnpm install
+cd packages/web
+npx wrangler login
+```
+
+`npx wrangler deploy` after a build creates the Worker named `swag-money` if it does not exist. You can also create an empty Worker in the dashboard with that name first. The first successful deploy prints `https://swag-money.<your-subdomain>.workers.dev`.
+
+Do not deploy until the secrets and the migration below are done. A deploy without them comes up, then `/v1/health` returns `database: "down"` or the API returns the missing variable names.
+
+## 3. Secrets and plain variables
+
+Generate a keypair on your machine. This prints three lines and does not write a file:
+
+```bash
 pnpm -s keys
 ```
 
-`pnpm -s keys` prints only two lines, `SWAG_SIGNING_PRIVATE_KEY` and `SWAG_SESSION_SECRET`. It does not write a file. Paste each value into Vercel. Do not commit them. Do not put them in GitHub Actions. Use `-s` so pnpm's own log lines are not mixed into the secrets.
+Put these in the Worker. From `packages/web`, each `secret put` prompts for the value (paste, then Enter):
 
-In **Settings → Environment Variables**, add these for Production, Preview, and Build:
+```bash
+npx wrangler secret put DATABASE_URL
+npx wrangler secret put SWAG_SIGNING_PRIVATE_KEY
+npx wrangler secret put SWAG_SESSION_SECRET
+```
+
+`DATABASE_URL` is the Neon connection string Neon shows as **direct** (host does not contain `-pooler`). The Worker driver speaks WebSocket and opens one connection per request. The pooled Neon URL is for long-lived TCP clients and will be warned about.
+
+Plain variables are already in `packages/web/wrangler.jsonc` and ride along with deploy:
 
 | Name | Value |
 | --- | --- |
-| `DATABASE_URL` | Pooled Neon or Supabase URL, from the integration |
-| `SWAG_SIGNING_PRIVATE_KEY` | Line printed by `pnpm -s keys` |
-| `SWAG_SESSION_SECRET` | Line printed by `pnpm -s keys` |
+| `SWAG_ENV` | `production` |
 | `SWAG_DEVELOPER_SHARE_BPS` | `5000` (50%). Any integer from 0 to 10000 |
-| `SWAG_PUBLIC_SITE_URL` | `https://swagmoney.ai` after the domain is attached. Until then, `https://<project>.vercel.app` |
+| `SWAG_PUBLIC_SITE_URL` | `https://swagmoney.ai` |
 
-Leave these unset. The site stays on mock payouts, and live payment keys are refused:
+Add the public key in the dashboard so it is not committed. **Workers & Pages → swag-money → Settings → Variables and Secrets → Add variable** (not a secret):
 
-`STRIPE_SECRET_KEY`, `STRIPE_CONNECT_CLIENT_ID`, `SOLANA_RPC_URL`, `SOLANA_PAYOUT_SECRET_KEY`, `LIGHTNING_NODE_URL`, `LIGHTNING_MACAROON`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RAZORPAYX_KEY_ID`, `RAZORPAYX_KEY_SECRET`
+| Name | Value |
+| --- | --- |
+| `SWAG_SIGNING_PUBLIC_KEY` | The public line from `pnpm -s keys` |
 
-Also leave unset: `SWAG_API_URL`, `SWAG_ALLOW_DEMO`, `SWAG_DATA_DIR`, `SWAG_ENV`. Vercel sets `VERCEL` itself. That flag turns off demo seeding (Ada, Lin, Northwind) even if `SWAG_ALLOW_DEMO=1`.
+It must be the public key for that private seed. A mismatch refuses to boot.
 
-If a required variable is missing, the first API request returns HTTP 500 and names the variables. The message points back at this file.
+Deploys use `wrangler deploy --keep-vars` so a later deploy does not delete dashboard variables.
 
-## 4. Deploy and check health
+Leave payment variables unset. Payouts stay mocked. `STRIPE_SECRET_KEY` starting with `sk_live_` and `RAZORPAYX_KEY_ID` starting with `rzp_live_` are refused.
 
-1. **Deployments → Redeploy** (or push a commit). The build log should contain `Migrations applied.`
-2. Open `https://<project>.vercel.app/v1/health`. A ready database looks like:
+Optional Hyperdrive: create a Hyperdrive config pointed at the same Neon database, then add a binding named `HYPERDRIVE` to `wrangler.jsonc` with that id. When the binding is present, the Worker uses `HYPERDRIVE.connectionString` instead of `DATABASE_URL`. For local preview of that binding, set `localConnectionString` or `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`. Hyperdrive is not required.
 
-   ```json
-   { "ok": true, "service": "swag-money", "database": "up" }
-   ```
+There is no cron trigger. Nothing in this app sweeps payouts or rolls up stats on a timer. Those totals are computed from the ledger when a page asks for them.
 
-   `/api/health` returns the same JSON. `database: "down"` is HTTP 503.
-3. Open `/`. The ledger strip shows **0** verified impressions, **$0.00** earned, **$0.00** paid out, and **0** developers. Those zeros come from the empty ledger. The page does not invent a number if the API is down; it says the ledger is unreachable.
-4. Open `/compare`. Submit the contact form once. The row is stored in Postgres. No email is sent.
+## 4. Migrations
 
-Local demo data is only `pnpm dev` (or an explicit seed on a machine that is not Vercel and does not have `SWAG_ENV=production`).
-
-## 5. Point swagmoney.ai at the deployment
-
-Do this after `/v1/health` is ok on the `*.vercel.app` URL.
-
-1. Vercel → **Project → Settings → Domains**.
-2. Add `swagmoney.ai`. Add `www.swagmoney.ai` as well.
-3. At the registrar, set the records Vercel shows. They are:
-
-   | Host | Type | Value |
-   | --- | --- | --- |
-   | `@` (apex) | A | `76.76.21.21` |
-   | `www` | CNAME | `cname.vercel-dns.com` |
-
-   If the registrar supports ALIAS or ANAME, the apex can be `cname.vercel-dns.com` instead of the A record. Use one of those, not both, unless Vercel lists both as required.
-4. Wait until Vercel marks the domain valid and provisions TLS.
-5. Set `SWAG_PUBLIC_SITE_URL` to `https://swagmoney.ai` and redeploy so metadata uses that origin.
-
-## Local production check
-
-Against a Postgres you run yourself:
+Migrations run in Node, against `DATABASE_URL`. They do not run when the Worker starts.
 
 ```bash
-export DATABASE_URL=postgres://...
-export SWAG_ENV=production
-export SWAG_DEVELOPER_SHARE_BPS=5000
-export SWAG_PUBLIC_SITE_URL=http://127.0.0.1:3000
-eval "$(pnpm -s keys | sed 's/^/export /')"
-unset SWAG_API_URL
+export DATABASE_URL='postgres://...neon host.../neondb'
 pnpm db:migrate
-pnpm --filter @swag-money/web build
-pnpm --filter @swag-money/web start
 ```
 
-Then request `/v1/health`, `/`, and `/compare`. `pnpm dev` is the separate local path: it keeps PGlite, demo users, and `SWAG_API_URL`.
+The SQL is idempotent (`IF NOT EXISTS`). Run it again after a schema change, before or as part of deploy. GitHub Actions does this when the Cloudflare secrets and `DATABASE_URL` are set.
+
+## 5. First deploy
+
+```bash
+pnpm --filter @swag-money/web exec opennextjs-cloudflare build
+cd packages/web
+npx wrangler deploy --keep-vars
+```
+
+Or, with the API token and account id exported, `pnpm deploy` from the repo root (migrate, then build, then deploy).
+
+Check:
+
+1. `https://swag-money.<subdomain>.workers.dev/v1/health` returns `{"ok":true,"service":"swag-money","database":"up"}`. `/api/health` is the same JSON.
+2. `/` shows **0** verified impressions and **$0.00**. An empty ledger is honest zeros. If the API is down the strip says the ledger is unreachable and does not invent a number.
+3. `/compare` loads. The contact form stores a row. No email is sent.
+4. Sign-up creates an account. Ada, Lin, and Northwind are not in the database. The homepage links to **Create an account**, not the demo sessions.
+
+## 6. swagmoney.ai
+
+Do this after health is ok on `*.workers.dev`.
+
+1. Cloudflare dashboard → **Add a domain** → `swagmoney.ai`. On the free plan this is a full zone.
+2. Cloudflare shows two nameservers. At the registrar, replace the existing nameservers with those two. Wait until the zone is **Active**.
+3. **Workers & Pages → swag-money → Settings → Domains & Routes → Add → Custom Domain**. Enter `swagmoney.ai`. Cloudflare creates the DNS record and the certificate. You do not add an A record yourself for the apex.
+4. `www` is a different hostname. Add a proxied DNS record so Cloudflare can redirect it:
+   - Type **A**, name `www`, IPv4 `192.0.2.0`, proxy **on** (orange cloud).
+   - **Rules → Redirect Rules → Create rule**. Match hostname `www.swagmoney.ai`. Then **Dynamic** redirect to `concat("https://swagmoney.ai", http.request.uri.path)` with status 301. Preserve the query string.
+5. Set `SWAG_PUBLIC_SITE_URL` to `https://swagmoney.ai` if it is not already, and redeploy with `--keep-vars`.
+
+## 7. Local preview
+
+`pnpm preview` migrates, builds the Worker, and serves it at `http://127.0.0.1:8788`.
+
+1. Copy `.dev.vars.example` to `packages/web/.dev.vars`.
+2. Set `DATABASE_URL` to a local Postgres URL.
+3. Paste `SWAG_SIGNING_PRIVATE_KEY`, `SWAG_SIGNING_PUBLIC_KEY`, and `SWAG_SESSION_SECRET` from `pnpm -s keys`.
+4. `pnpm preview`.
+
+`SWAG_ENV=production` comes from `wrangler.jsonc`, so the preview does not seed demo users.
+
+## 8. Rollback
+
+Dashboard: **Workers & Pages → swag-money → Deployments →** the previous deployment **→ Rollback**.
+
+CLI, from `packages/web`:
+
+```bash
+npx wrangler rollback
+```
+
+Rollback does not undo a migration. The SQL only adds tables and columns.
+
+## 9. GitHub Actions or Workers Builds
+
+`.github/workflows/ci.yml` runs install, typecheck, lint, and tests on pull requests and on pushes to `main`.
+
+`.github/workflows/deploy.yml` runs on pushes to `main`. It migrates, builds with OpenNext, then `cloudflare/wrangler-action` deploys. It skips when `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` is unset.
+
+Workers Builds is the dashboard alternative. **Workers & Pages → swag-money → Settings → Builds → Connect** this GitHub repo.
+
+- Root directory: the repository root
+- Build command: `pnpm install --frozen-lockfile && pnpm db:migrate && pnpm --filter @swag-money/web exec opennextjs-cloudflare build`
+- Deploy command: `pnpm --filter @swag-money/web exec wrangler deploy --keep-vars`
+
+Put `DATABASE_URL` in the build environment so migrate can run. Runtime secrets stay the Worker secrets from step 3. Use one of the two deploy paths, not both, or every push deploys twice.
+
+## Limits
+
+Measure the bundle from `packages/web` after a build:
+
+```bash
+npx wrangler deploy --dry-run --outdir /tmp/swag-worker-bundle --keep-vars
+```
+
+Wrangler prints `Total Upload` (uncompressed, the current limit) and `gzip`. As of 4 September 2026 Cloudflare dropped the old 3 MB free / 10 MB paid compressed caps. The limit is now **64 MiB uncompressed** on every plan. The gzip figure is still worth reading.
+
+CPU time is separate. The free plan allows **10 ms of CPU per request**. Waiting on Neon does not count. Workers Paid allows 30 seconds by default (up to 5 minutes). Password checks use Node `scrypt`, which is slower than 10 ms, and a Next.js render is heavier than a tiny Worker. Plan on **Workers Paid** for sign-in and for server-rendered pages. Static files under the assets binding do not spend that CPU budget.
+
+What would shrink the Worker: drop unused Next routes, or move the API to a second smaller Worker. This repo keeps one Worker on purpose.

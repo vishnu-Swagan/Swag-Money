@@ -3,6 +3,7 @@ import { DemoSwitch, SiteFooter, SiteNav } from '../../components/nav'
 import { LoginPanel } from '../../components/login-panel'
 import { SetupForm } from '../../components/setup-form'
 import { apiJson } from '../../lib/api'
+import { demoAccountsEnabled } from '../../lib/demo'
 import { keepDeletion, reactivateAccount, signOut } from '../actions'
 
 type Profile = {
@@ -58,11 +59,13 @@ export default async function LoginPage({
           <LoginPanel next={next} error={query.error} />
         )}
         {query.notice === 'deletion' ? <p className="banner">Deletion stays scheduled. You are signed out.</p> : null}
-        <section>
-          <h2>Local demo</h2>
-          <p className="tiny">Fixture accounts on this machine. They skip the age checkbox because they are already seeded.</p>
-          <DemoSwitch />
-        </section>
+        {demoAccountsEnabled() ? (
+          <section>
+            <h2>Local demo</h2>
+            <p className="tiny">Fixture accounts on this machine. They skip the age checkbox because they are already seeded.</p>
+            <DemoSwitch />
+          </section>
+        ) : null}
       </main>
       <SiteFooter />
     </>

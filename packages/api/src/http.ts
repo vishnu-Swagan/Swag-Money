@@ -6,51 +6,31 @@ import {
 } from '@swag-money/shared'
 import { createApp } from './app.ts'
 import { assertProductionEnv, isHosted } from './config.ts'
-import type { SwagDb } from './db.ts'
-import { loadSigningKeyFromEnv } from './keys.ts'
-import { ensureMigrated, openPostgres } from './pg-db.ts'
+import { loadSigningKeyFromEnv } from './keys-env.ts'
+import { withDatabase } from './pg-db.ts'
 
 type App = ReturnType<typeof createApp>
 
-const globalCache = globalThis as typeof globalThis & {
-  __swagApp?: App
-  __swagBoot?: Promise<App>
-}
-
 export async function handleApi(request: Request): Promise<Response> {
   try {
-    const app = await boot()
-    return await app.fetch(request)
+    assertProductionEnv()
+    if (!process.env.DATABASE_URL?.trim()) {
+      throw new Error('DATABASE_URL is required for the in-process API. Set SWAG_API_URL to use the local API instead. See DEPLOY.md.')
+    }
+    return await withDatabase(async (db) => {
+      const app = buildApp(db)
+      return await app.fetch(request)
+    })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'API failed to start'
-    return Response.json({ ok: false, error: message }, { status: 500 })
+    const path = new URL(request.url).pathname
+    if (path === '/v1/health' || path === '/health') {
+      return Response.json({ ok: false, service: 'swag-money', database: 'down' }, { status: 503 })
+    }
+    return Response.json({ ok: false, error: publicError(error) }, { status: 500 })
   }
 }
 
-async function boot(): Promise<App> {
-  if (globalCache.__swagApp) return globalCache.__swagApp
-  if (!globalCache.__swagBoot) {
-    globalCache.__swagBoot = start().then(
-      (app) => {
-        globalCache.__swagApp = app
-        return app
-      },
-      (error: unknown) => {
-        globalCache.__swagBoot = undefined
-        throw error
-      },
-    )
-  }
-  return globalCache.__swagBoot
-}
-
-async function start(): Promise<App> {
-  assertProductionEnv()
-  if (!process.env.DATABASE_URL?.trim()) {
-    throw new Error('DATABASE_URL is required for the in-process API. Set SWAG_API_URL to use the local API instead. See DEPLOY.md.')
-  }
-  const db = openPostgres() as unknown as SwagDb
-  await ensureMigrated()
+function buildApp(db: Parameters<typeof createApp>[0]['db']): App {
   const signing = loadSigningKeyFromEnv(process.env.SWAG_SIGNING_PRIVATE_KEY)
   const sessionSecret = process.env.SWAG_SESSION_SECRET?.trim() ?? ''
   if (sessionSecret.length < 16 || sessionSecret === 'replace-with-a-long-random-string') {
@@ -79,6 +59,14 @@ async function start(): Promise<App> {
       razorpayxKeySecret: emptyToUndefined(process.env.RAZORPAYX_KEY_SECRET),
     },
   })
+}
+
+function publicError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'API failed to start'
+  if (/postgres(ql)?:\/\//i.test(message) || /password authentication/i.test(message)) {
+    return 'Database connection failed. See DEPLOY.md.'
+  }
+  return message
 }
 
 function intEnv(name: string, fallback: number): number {

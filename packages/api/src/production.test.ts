@@ -45,32 +45,35 @@ describe('production configuration', () => {
     expect(productionProblems({ SWAG_ENV: 'production' })).toEqual([
       'DATABASE_URL',
       'SWAG_SIGNING_PRIVATE_KEY',
+      'SWAG_SIGNING_PUBLIC_KEY',
       'SWAG_SESSION_SECRET',
       'SWAG_DEVELOPER_SHARE_BPS',
       'SWAG_PUBLIC_SITE_URL',
     ])
-    expect(() => assertProductionEnv({ VERCEL: '1' })).toThrow(/DATABASE_URL/)
-    expect(() => assertProductionEnv({ VERCEL: '1' })).toThrow(/DEPLOY.md/)
+    expect(() => assertProductionEnv({ SWAG_ENV: 'production' })).toThrow(/DATABASE_URL/)
+    expect(() => assertProductionEnv({ SWAG_ENV: 'production' })).toThrow(/DEPLOY.md/)
   })
 
-  it('accepts a complete hosted environment', () => {
-    const key = bytesToB64Url(generateEd25519KeyPair().privateKey)
-    expect(
-      productionProblems({
-        VERCEL: '1',
-        DATABASE_URL: 'postgres://user:pass@ep-example-pooler.neon.tech/neondb',
-        SWAG_SIGNING_PRIVATE_KEY: key,
-        SWAG_SESSION_SECRET: 'session-secret-value',
-        SWAG_DEVELOPER_SHARE_BPS: '5000',
-        SWAG_PUBLIC_SITE_URL: 'https://swagmoney.ai',
-      }),
-    ).toEqual([])
+  it('accepts a complete hosted environment and rejects a public key that does not match', () => {
+    const pair = generateEd25519KeyPair()
+    const complete = {
+      SWAG_ENV: 'production',
+      DATABASE_URL: 'postgres://user:pass@ep-example.neon.tech/neondb',
+      SWAG_SIGNING_PRIVATE_KEY: bytesToB64Url(pair.privateKey),
+      SWAG_SIGNING_PUBLIC_KEY: bytesToB64Url(pair.publicKey),
+      SWAG_SESSION_SECRET: 'session-secret-value',
+      SWAG_DEVELOPER_SHARE_BPS: '5000',
+      SWAG_PUBLIC_SITE_URL: 'https://swagmoney.ai',
+    }
+    expect(productionProblems(complete)).toEqual([])
+    expect(productionProblems({ ...complete, SWAG_SIGNING_PUBLIC_KEY: bytesToB64Url(generateEd25519KeyPair().publicKey) })).toEqual([
+      'SWAG_SIGNING_PUBLIC_KEY',
+    ])
   })
 
   it('refuses to seed demo users when hosted', async () => {
     const opened = await openDatabase()
     close = opened.close
-    await expect(seedIfEmpty(opened.db, 1, { VERCEL: '1' })).rejects.toThrow(/production/)
     await expect(seedIfEmpty(opened.db, 1, { SWAG_ENV: 'production' })).rejects.toThrow(/production/)
   })
 

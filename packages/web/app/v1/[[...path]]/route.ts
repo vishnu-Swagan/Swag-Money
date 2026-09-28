@@ -1,4 +1,5 @@
 import { handleApi } from '@swag-money/api/http'
+import { loadWorkerEnv } from '../../../lib/worker-env'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -6,6 +7,7 @@ export const dynamic = 'force-dynamic'
 type Ctx = { params: Promise<{ path?: string[] }> }
 
 async function forward(request: Request, ctx: Ctx): Promise<Response> {
+  await loadWorkerEnv()
   const { path } = await ctx.params
   const url = new URL(request.url)
   const suffix = path?.length ? `/${path.join('/')}` : ''

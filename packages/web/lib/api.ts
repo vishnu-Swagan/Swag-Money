@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import { loadWorkerEnv } from './worker-env'
 
 function remoteBase(): string | undefined {
   const value = process.env.SWAG_API_URL?.trim()
@@ -6,6 +7,7 @@ function remoteBase(): string | undefined {
 }
 
 export async function api(path: string, init?: RequestInit): Promise<Response> {
+  await loadWorkerEnv()
   const jar = await cookies()
   const token = jar.get('swag_session')?.value
   const headers = new Headers(init?.headers)
