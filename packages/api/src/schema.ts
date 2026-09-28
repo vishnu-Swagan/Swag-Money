@@ -12,6 +12,7 @@ export const users = pgTable('users', {
   payoutPreference: text('payout_preference').notNull().default(''),
   setupComplete: integer('setup_complete').notNull().default(1),
   deletionScheduledAtMs: bigint('deletion_scheduled_at_ms', { mode: 'number' }),
+  signupMethod: text('signup_method').notNull().default('email'),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
@@ -147,4 +148,74 @@ export const payouts = pgTable('payouts', {
   detail: text('detail').notNull(),
   status: text('status').notNull(),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const crmNotes = pgTable('crm_notes', {
+  id: text('id').primaryKey(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  authorId: text('author_id').notNull(),
+  body: text('body').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const crmTags = pgTable('crm_tags', {
+  id: text('id').primaryKey(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  tag: text('tag').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const advertiserCrm = pgTable('advertiser_crm', {
+  userId: text('user_id').primaryKey(),
+  stage: text('stage').notNull(),
+  ownerEmail: text('owner_email').notNull().default(''),
+  followUpAtMs: bigint('follow_up_at_ms', { mode: 'number' }),
+  updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const leads = pgTable('leads', {
+  id: text('id').primaryKey(),
+  source: text('source').notNull(),
+  sourceId: text('source_id').notNull(),
+  name: text('name').notNull().default(''),
+  email: text('email').notNull().default(''),
+  topic: text('topic').notNull().default(''),
+  body: text('body').notNull().default(''),
+  status: text('status').notNull().default('new'),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const userFlags = pgTable('user_flags', {
+  userId: text('user_id').primaryKey(),
+  suspended: integer('suspended').notNull().default(0),
+  payoutReviewed: integer('payout_reviewed').notNull().default(0),
+  updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const adminAuditLog = pgTable('admin_audit_log', {
+  id: text('id').primaryKey(),
+  actorId: text('actor_id').notNull(),
+  actorEmail: text('actor_email').notNull(),
+  action: text('action').notNull(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  detail: text('detail').notNull().default(''),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const adminNotifications = pgTable('admin_notifications', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(),
+  toEmail: text('to_email').notNull().default(''),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  adapter: text('adapter').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const schemaMigrations = pgTable('schema_migrations', {
+  version: text('version').primaryKey(),
+  appliedAtMs: bigint('applied_at_ms', { mode: 'number' }).notNull(),
 })

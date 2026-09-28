@@ -4,6 +4,7 @@ import {
   MIN_VIEW_MS,
   PAYOUT_MIN_CENTS,
 } from '@swag-money/shared'
+import { adminEmailsFromEnv } from './admin-mask.ts'
 import { createApp } from './app.ts'
 import { assertProductionEnv, isHosted } from './config.ts'
 import { loadSigningKeyFromEnv } from './keys-env.ts'
@@ -48,6 +49,9 @@ function buildApp(db: Parameters<typeof createApp>[0]['db']): App {
       impressionTtlMs: intEnv('SWAG_IMPRESSION_TTL_MS', IMPRESSION_TTL_MS),
       developerShareBps: intEnv('SWAG_DEVELOPER_SHARE_BPS', DEFAULT_DEVELOPER_SHARE_BPS),
       sessionSecret,
+      adminEmails: adminEmailsFromEnv(),
+      notifyAdvertiserSignups: process.env.SWAG_ADMIN_NOTIFY === '1',
+      notifyTo: process.env.SWAG_ADMIN_NOTIFY_TO?.trim() ?? '',
       stripeSecretKey: emptyToUndefined(process.env.STRIPE_SECRET_KEY),
       solanaRpcUrl: emptyToUndefined(process.env.SOLANA_RPC_URL),
       solanaPayoutSecret: emptyToUndefined(process.env.SOLANA_PAYOUT_SECRET_KEY),

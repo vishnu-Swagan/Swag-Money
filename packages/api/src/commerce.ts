@@ -13,6 +13,10 @@ import {
   type Surface,
 } from '@swag-money/shared'
 import type { SwagDb } from './db.ts'
+import { isAdminEmail } from './admin-mask.ts'
+import { isSuspended } from './flags.ts'
+import { recordLead } from './leads.ts'
+import { notifyAdvertiserSignup } from './notify.ts'
 import { generateApiKey, hashPassword, verifyPassword } from './passwords.ts'
 import { apiKeys, campaigns, checkouts, impressions, ledger, users } from './schema.ts'
 import { signSession } from './session.ts'
@@ -25,6 +29,9 @@ export type CommerceDeps = {
   clock: { now(): number }
   sessionSecret: string
   developerShareBps: number
+  adminEmails?: readonly string[]
+  notifyAdvertiserSignups?: boolean
+  notifyTo?: string
 }
 
 const OPENAPI = {
@@ -87,9 +94,28 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
         name,
         role,
         passwordHash: hashPassword(password),
+        signupMethod: 'email',
         setupComplete: 0,
         createdAtMs: clock.now(),
       })
+      await recordLead(db, {
+        source: 'signup',
+        sourceId: id,
+        name,
+        email,
+        topic: role,
+        body: '',
+        createdAtMs: clock.now(),
+      })
+      if (role === 'advertiser') {
+        await notifyAdvertiserSignup(db, {
+          enabled: deps.notifyAdvertiserSignups === true,
+          toEmail: deps.notifyTo ?? '',
+          advertiserEmail: email,
+          name,
+          now: clock.now(),
+        })
+      }
       return c.json({ token: signSession(id, sessionSecret), user: { id, email, name, role, setupComplete: false } }, 201)
     } catch (error) {
       const message = messageOf(error)
@@ -107,6 +133,9 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
     const [user] = await db.select().from(users).where(eq(users.email, email))
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
       return c.json({ error: 'Email or password is wrong', code: 'unauthorized' }, 401)
+    }
+    if ((await isSuspended(db, user.id)) && !isAdminEmail(user.email, deps.adminEmails ?? [])) {
+      return c.json({ error: 'This account is suspended.', code: 'forbidden' }, 403)
     }
     return c.json({
       token: signSession(user.id, sessionSecret),

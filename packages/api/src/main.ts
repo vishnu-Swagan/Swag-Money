@@ -4,11 +4,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bytesToB64Url, fingerprint } from '@swag-money/crypto'
 import { DEFAULT_DEVELOPER_SHARE_BPS, IMPRESSION_TTL_MS, MIN_VIEW_MS, PAYOUT_MIN_CENTS } from '@swag-money/shared'
+import { adminEmailsFromEnv } from './admin-mask.ts'
 import { createApp } from './app.ts'
 import { isHosted } from './config.ts'
 import { openDatabase } from './db.ts'
 import { loadSessionSecret, loadSigningKey } from './keys.ts'
-import { DEMO_ADVERTISER, DEMO_DEVELOPER, DEMO_PASSWORD, ensureDemoPasswords, seedIfEmpty } from './seed.ts'
+import { DEMO_ADVERTISER, DEMO_DEVELOPER, DEMO_PASSWORD, ensureDemoPasswords, seedCrmDemo, seedIfEmpty } from './seed.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 loadDotEnv(path.join(repoRoot, '.env'))
@@ -27,6 +28,7 @@ const sessionSecret = loadSessionSecret(dataDir, process.env.SWAG_SESSION_SECRET
 const database = await openDatabase(path.join(dataDir, 'pg'))
 const clock = { now: () => Date.now() }
 await seedIfEmpty(database.db, clock.now())
+await seedCrmDemo(database.db, clock.now())
 await ensureDemoPasswords(database.db)
 
 const app = createApp({
@@ -41,6 +43,9 @@ const app = createApp({
     impressionTtlMs: intEnv('SWAG_IMPRESSION_TTL_MS', IMPRESSION_TTL_MS),
     developerShareBps: intEnv('SWAG_DEVELOPER_SHARE_BPS', DEFAULT_DEVELOPER_SHARE_BPS),
     sessionSecret,
+    adminEmails: adminEmailsFromEnv(),
+    notifyAdvertiserSignups: process.env.SWAG_ADMIN_NOTIFY === '1',
+    notifyTo: process.env.SWAG_ADMIN_NOTIFY_TO?.trim() ?? '',
     stripeSecretKey: emptyToUndefined(process.env.STRIPE_SECRET_KEY),
     solanaRpcUrl: emptyToUndefined(process.env.SOLANA_RPC_URL),
     solanaPayoutSecret: emptyToUndefined(process.env.SOLANA_PAYOUT_SECRET_KEY),

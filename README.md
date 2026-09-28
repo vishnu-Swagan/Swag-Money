@@ -26,7 +26,7 @@ packages/adapters
 packages/web           Next.js site, dashboards, install pages, advertiser checkout
 ```
 
-Local `pnpm dev` uses embedded Postgres (PGlite) at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Production is one Cloudflare Worker: the Next.js app serves the site and `/v1` against Neon (`DATABASE_URL`). Demo users are not seeded there. See [DEPLOY.md](DEPLOY.md).
+Local `pnpm dev` uses embedded Postgres (PGlite) at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Production is one Cloudflare Worker: the Next.js app serves the site and `/v1` against Neon (`DATABASE_URL`). Demo users are not seeded there. `/admin` is a private CRM for emails listed in `ADMIN_EMAILS` and is not linked from the public site. See [DEPLOY.md](DEPLOY.md).
 
 ```text
 adapter  --signed request-->  API auction
