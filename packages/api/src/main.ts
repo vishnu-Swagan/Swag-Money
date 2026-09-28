@@ -8,6 +8,7 @@ import { createApp } from './app.ts'
 import { isHosted } from './config.ts'
 import { openDatabase } from './db.ts'
 import { loadSessionSecret, loadSigningKey } from './keys.ts'
+import { seedCrmDemo } from './seed-crm.ts'
 import { DEMO_ADVERTISER, DEMO_DEVELOPER, DEMO_PASSWORD, ensureDemoPasswords, seedIfEmpty } from './seed.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -27,6 +28,7 @@ const sessionSecret = loadSessionSecret(dataDir, process.env.SWAG_SESSION_SECRET
 const database = await openDatabase(path.join(dataDir, 'pg'))
 const clock = { now: () => Date.now() }
 await seedIfEmpty(database.db, clock.now())
+await seedCrmDemo(database.db, clock.now())
 await ensureDemoPasswords(database.db)
 
 const app = createApp({

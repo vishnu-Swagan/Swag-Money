@@ -28,6 +28,8 @@ packages/web           Next.js site, dashboards, install pages, advertiser check
 
 Local `pnpm dev` uses embedded Postgres (PGlite) at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Production is one Cloudflare Worker: the Next.js app serves the site and `/v1` against Neon (`DATABASE_URL`). Demo users are not seeded there. See [DEPLOY.md](DEPLOY.md).
 
+`/admin` is a private CRM for the same database: developers, advertisers, the leads inbox, campaigns, payouts, and a read-only table browser. It is not linked from public pages. Set `ADMIN_EMAILS` to the operator addresses. Everyone else gets a 404. New advertiser signups can record a mock email when `ADMIN_NOTIFY_ADVERTISERS=1` and `ADMIN_NOTIFY_EMAIL` are set. That adapter does not send mail.
+
 ```text
 adapter  --signed request-->  API auction
 adapter  <-- { payload, signature } --   (no code, no signing key)

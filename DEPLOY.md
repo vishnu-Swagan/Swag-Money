@@ -75,6 +75,18 @@ It must be the public key for that private seed. A mismatch refuses to boot.
 
 Deploys use `wrangler deploy --keep-vars` so a later deploy does not delete dashboard variables.
 
+Optional, not required for the site to boot. Add them under **Workers & Pages → swag-money → Settings → Variables and Secrets**. `ADMIN_EMAILS` can be a plain variable. Leave the notify pair unset.
+
+| Name | Value |
+| --- | --- |
+| `ADMIN_EMAILS` | Comma-separated emails allowed into `/admin` after they sign in with the normal session. Unset means the desk 404s for everyone. |
+| `ADMIN_NOTIFY_ADVERTISERS` | Set to `1` to record a mock email when an advertiser account is created. Leave unset. |
+| `ADMIN_NOTIFY_EMAIL` | Address stored on that mock notice. Ignored unless the flag above is `1`. |
+
+`/admin` is not linked from the public site and sends `noindex`. The mock mailer writes `crm_mail_outbox` and does not open a socket. To send real mail, replace `notifyAdvertiserSignup` in `packages/api/src/crm.ts` with a provider call (Resend, SES, or Postmark), keep the outbox row, and put the provider API key in a Worker secret. Do not log that key. Leave the flag off until that call exists.
+
+CRM demo rows (extra developers, pipeline cards, inbox samples) are inserted by local `pnpm dev` only. They are refused when `SWAG_ENV=production` (the Worker) or `VERCEL_ENV=production`, same as Ada, Lin, and Northwind.
+
 Leave payment variables unset. Payouts stay mocked. `STRIPE_SECRET_KEY` starting with `sk_live_` and `RAZORPAYX_KEY_ID` starting with `rzp_live_` are refused.
 
 Optional Hyperdrive: create a Hyperdrive config pointed at the same Neon database, then add a binding named `HYPERDRIVE` to `wrangler.jsonc` with that id. When the binding is present, the Worker uses `HYPERDRIVE.connectionString` instead of `DATABASE_URL`. For local preview of that binding, set `localConnectionString` or `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`. Hyperdrive is not required.

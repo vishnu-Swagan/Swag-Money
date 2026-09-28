@@ -1,4 +1,4 @@
-import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core'
+import { bigint, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -12,6 +12,8 @@ export const users = pgTable('users', {
   payoutPreference: text('payout_preference').notNull().default(''),
   setupComplete: integer('setup_complete').notNull().default(1),
   deletionScheduledAtMs: bigint('deletion_scheduled_at_ms', { mode: 'number' }),
+  signupMethod: text('signup_method').notNull().default(''),
+  accountStatus: text('account_status').notNull().default('active'),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
@@ -146,5 +148,80 @@ export const payouts = pgTable('payouts', {
   externalId: text('external_id').notNull(),
   detail: text('detail').notNull(),
   status: text('status').notNull(),
+  reviewedAtMs: bigint('reviewed_at_ms', { mode: 'number' }),
+  reviewedBy: text('reviewed_by').notNull().default(''),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const crmNotes = pgTable('crm_notes', {
+  id: text('id').primaryKey(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  authorId: text('author_id').notNull(),
+  body: text('body').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const crmTags = pgTable(
+  'crm_tags',
+  {
+    id: text('id').primaryKey(),
+    subjectType: text('subject_type').notNull(),
+    subjectId: text('subject_id').notNull(),
+    tag: text('tag').notNull(),
+    authorId: text('author_id').notNull(),
+    createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+  },
+  (table) => [uniqueIndex('crm_tags_unique_idx').on(table.subjectType, table.subjectId, table.tag)],
+)
+
+export const crmAdvertisers = pgTable('crm_advertisers', {
+  userId: text('user_id').primaryKey(),
+  pipelineStage: text('pipeline_stage').notNull().default('lead'),
+  owner: text('owner').notNull().default(''),
+  followUpAtMs: bigint('follow_up_at_ms', { mode: 'number' }),
+  company: text('company').notNull().default(''),
+})
+
+export const crmLeads = pgTable(
+  'crm_leads',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind').notNull(),
+    sourceId: text('source_id').notNull(),
+    name: text('name').notNull().default(''),
+    email: text('email').notNull().default(''),
+    company: text('company').notNull().default(''),
+    country: text('country').notNull().default(''),
+    summary: text('summary').notNull().default(''),
+    status: text('status').notNull().default('new'),
+    createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+    updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
+  },
+  (table) => [uniqueIndex('crm_leads_source_idx').on(table.kind, table.sourceId)],
+)
+
+export const adminAuditLog = pgTable('admin_audit_log', {
+  id: text('id').primaryKey(),
+  actorUserId: text('actor_user_id').notNull(),
+  actorEmail: text('actor_email').notNull(),
+  action: text('action').notNull(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  detail: text('detail').notNull().default(''),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const crmMailOutbox = pgTable('crm_mail_outbox', {
+  id: text('id').primaryKey(),
+  toEmail: text('to_email').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  delivery: text('delivery').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const schemaMigrations = pgTable('schema_migrations', {
+  version: text('version').primaryKey(),
+  appliedAtMs: bigint('applied_at_ms', { mode: 'number' }).notNull(),
 })
