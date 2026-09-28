@@ -157,6 +157,75 @@ CREATE TABLE IF NOT EXISTS request_nonces (
   seen_at_ms bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS request_nonces_install_idx ON request_nonces (install_id, seen_at_ms);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_method text NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status text NOT NULL DEFAULT 'active';
+ALTER TABLE payouts ADD COLUMN IF NOT EXISTS reviewed_at_ms bigint;
+ALTER TABLE payouts ADD COLUMN IF NOT EXISTS reviewed_by text NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS crm_notes (
+  id text PRIMARY KEY,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  author_id text NOT NULL,
+  body text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS crm_notes_subject_idx ON crm_notes (subject_type, subject_id, created_at_ms);
+CREATE TABLE IF NOT EXISTS crm_tags (
+  id text PRIMARY KEY,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  tag text NOT NULL,
+  author_id text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS crm_tags_unique_idx ON crm_tags (subject_type, subject_id, tag);
+CREATE TABLE IF NOT EXISTS crm_advertisers (
+  user_id text PRIMARY KEY REFERENCES users(id),
+  pipeline_stage text NOT NULL DEFAULT 'lead',
+  owner text NOT NULL DEFAULT '',
+  follow_up_at_ms bigint,
+  company text NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS crm_leads (
+  id text PRIMARY KEY,
+  kind text NOT NULL,
+  source_id text NOT NULL,
+  name text NOT NULL DEFAULT '',
+  email text NOT NULL DEFAULT '',
+  company text NOT NULL DEFAULT '',
+  country text NOT NULL DEFAULT '',
+  summary text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'new',
+  created_at_ms bigint NOT NULL,
+  updated_at_ms bigint NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS crm_leads_source_idx ON crm_leads (kind, source_id);
+CREATE INDEX IF NOT EXISTS crm_leads_created_idx ON crm_leads (created_at_ms);
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id text PRIMARY KEY,
+  actor_user_id text NOT NULL,
+  actor_email text NOT NULL,
+  action text NOT NULL,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  detail text NOT NULL DEFAULT '',
+  created_at_ms bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_audit_log_created_idx ON admin_audit_log (created_at_ms);
+CREATE TABLE IF NOT EXISTS crm_mail_outbox (
+  id text PRIMARY KEY,
+  to_email text NOT NULL,
+  subject text NOT NULL,
+  body text NOT NULL,
+  delivery text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version text PRIMARY KEY,
+  applied_at_ms bigint NOT NULL
+);
+INSERT INTO schema_migrations (version, applied_at_ms) VALUES ('0001-base', 0) ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, applied_at_ms) VALUES ('0002-crm', 1759017600000) ON CONFLICT (version) DO NOTHING;
 `
 
 /** Statements in order. Split so a transaction-mode pooler can run them one at a time. */

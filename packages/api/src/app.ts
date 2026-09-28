@@ -31,6 +31,8 @@ import {
   splitRevenue,
   type AuctionCandidate,
 } from '@swag-money/shared'
+import { parseAdminEmails } from './admin-auth.ts'
+import { registerAdmin } from './admin.ts'
 import { registerCommerce } from './commerce.ts'
 import { registerIntake } from './intake.ts'
 import type { SwagDb } from './db.ts'
@@ -51,6 +53,8 @@ export type AppEnv = PayoutEnv & {
   impressionTtlMs: number
   sessionSecret: string
   developerShareBps?: number
+  /** When omitted, ADMIN_EMAILS from the process environment is used. */
+  adminEmails?: readonly string[]
 }
 
 type Vars = { user: UserRow | undefined }
@@ -90,6 +94,7 @@ export function createApp(deps: {
   signingPublicKey: Uint8Array
 }) {
   const { db, clock, env, signingPrivateKey, signingPublicKey } = deps
+  const adminEmails = env.adminEmails ?? parseAdminEmails(process.env.ADMIN_EMAILS)
   const developerShareBps = env.developerShareBps ?? DEFAULT_DEVELOPER_SHARE_BPS
   if (!Number.isInteger(developerShareBps) || developerShareBps < 0 || developerShareBps > 10_000) {
     throw new Error('developerShareBps must be an integer from 0 to 10000')
@@ -348,6 +353,7 @@ export function createApp(deps: {
     const user = c.get('user')
     if (!user) return c.json({ error: 'Sign in required', code: 'unauthorized' }, 401)
     if (user.role !== 'developer') return c.json({ error: 'Developer account required', code: 'forbidden' }, 403)
+    if (user.accountStatus === 'suspended') return c.json({ error: 'Developer account is suspended', code: 'suspended' }, 403)
     const body = await readBody(c)
     const provider = body.provider
     const destination = body.destination
@@ -430,6 +436,10 @@ export function createApp(deps: {
     if (replayed) return c.json({ error: 'Request nonce already used', code: 'replay' }, 409)
     const [install] = await db.select().from(installs).where(eq(installs.id, installId))
     if (!install) return c.json({ error: 'Unknown install', code: 'not_found' }, 404)
+    const [developer] = await db.select({ accountStatus: users.accountStatus }).from(users).where(eq(users.id, install.userId))
+    if (developer?.accountStatus === 'suspended') {
+      return c.json({ error: 'Developer account is suspended', code: 'suspended' }, 403)
+    }
     const requestMessage = canonicalAdRequest({ installId, surface, requestNonce, signedAt })
     let deviceKey: Uint8Array
     try {
@@ -701,6 +711,7 @@ export function createApp(deps: {
     sessionSecret: env.sessionSecret,
     allowDemo: env.allowDemo,
   })
+  registerAdmin(app, { db, clock, adminEmails })
 
   return app
 }
