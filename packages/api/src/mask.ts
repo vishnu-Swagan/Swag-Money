@@ -19,6 +19,12 @@ export function maskWallet(value: string): string {
   return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`
 }
 
+/** Names that are actually emails (privacy requests) stay masked in lists. */
+export function maskIfCredential(value: string): string {
+  if (value.includes('@')) return maskEmail(value)
+  return value
+}
+
 /** UPI ids and lightning addresses contain @. Wallet addresses do not. */
 export function maskCredential(value: string): string {
   const trimmed = value.trim()

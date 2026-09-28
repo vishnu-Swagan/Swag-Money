@@ -1,7 +1,7 @@
 import { count, desc, eq, getTableColumns, sql } from 'drizzle-orm'
 import type { SwagDb } from './db.ts'
 import { pipelineLabel, syncInbox } from './crm.ts'
-import { maskCredential, maskEmail } from './mask.ts'
+import { maskCredential, maskEmail, maskIfCredential } from './mask.ts'
 import {
   adminAuditLog,
   apiKeys,
@@ -517,7 +517,7 @@ export async function listLeads(db: SwagDb, now: number, status?: string) {
       id: row.id,
       kind: row.kind,
       sourceId: row.sourceId,
-      name: row.name,
+      name: maskIfCredential(row.name),
       emailMasked: row.email ? maskEmail(row.email) : '',
       company: row.company,
       country: row.country,
@@ -623,7 +623,7 @@ export async function searchAll(db: SwagDb, q: string, now: number) {
       .map((row) => ({
         id: row.id,
         kind: row.kind,
-        name: row.name,
+        name: maskIfCredential(row.name),
         emailMasked: row.email ? maskEmail(row.email) : '',
         company: row.company,
         summary: row.summary,
