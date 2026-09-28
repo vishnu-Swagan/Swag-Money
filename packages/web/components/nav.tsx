@@ -13,6 +13,8 @@ export type NavCurrent =
   | 'faq'
   | 'api'
   | 'login'
+  | 'compare'
+  | 'contact'
 
 export function SiteNav({ current, signedIn = false }: { current?: NavCurrent; signedIn?: boolean }) {
   return (
@@ -23,6 +25,7 @@ export function SiteNav({ current, signedIn = false }: { current?: NavCurrent; s
         <span>swagmoney.ai</span>
       </Link>
       <nav className="nav-links" aria-label="Primary">
+        <Link href="/compare" aria-current={current === 'compare' ? 'page' : undefined}>Compare</Link>
         <Link href="/integrations" aria-current={current === 'integrations' ? 'page' : undefined}>Integrations</Link>
         <Link href="/install" aria-current={current === 'install' ? 'page' : undefined}>Install</Link>
         <Link href="/advertise" aria-current={current === 'advertise' ? 'page' : undefined}>Advertise</Link>
@@ -46,6 +49,8 @@ export function SiteFooter() {
     <footer className="wrap site-footer">
       <span>Swag-Money · swagmoney.ai</span>
       <span>
+        <Link href="/compare">Compare</Link>
+        {' · '}
         <Link href="/faq">FAQ</Link>
         {' · '}
         <Link href="/surface-pricing">Pricing</Link>
@@ -56,10 +61,13 @@ export function SiteFooter() {
         {' · '}
         <Link href="/terms">Terms</Link>
         {' · '}
-        <Link href="/privacy-choices">Privacy choices</Link>
+        <Link href="/privacy-choices">Your Privacy Choices</Link>
+        {' · '}
+        <Link href="/contact">Contact</Link>
         {' · '}
         <Link href="/security">Security</Link>
       </span>
+      <p className="tiny">Kickbacks.ai is a trademark of ShiftKeys Inc. Comparison based on public information as of September 2026. Corrections: legal@swagmoney.ai.</p>
     </footer>
   )
 }

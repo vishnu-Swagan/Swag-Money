@@ -23,6 +23,10 @@ export default async function SignupPage({
           <input id="email" name="email" type="email" required />
           <label htmlFor="password">Password</label>
           <input id="password" name="password" type="password" required minLength={8} />
+          <label className="check-row">
+            <input type="checkbox" name="adult" value="yes" required />
+            I am 18 or older and I agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.
+          </label>
           <label htmlFor="role">I am here to</label>
           <select id="role" name="role" defaultValue="developer">
             <option value="developer">Earn from wait states</option>

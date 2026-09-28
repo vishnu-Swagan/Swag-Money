@@ -6,6 +6,12 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   role: text('role').notNull(),
   passwordHash: text('password_hash').notNull().default(''),
+  ageConfirmed: integer('age_confirmed').notNull().default(0),
+  residenceCountry: text('residence_country').notNull().default(''),
+  newsOptIn: integer('news_opt_in').notNull().default(0),
+  payoutPreference: text('payout_preference').notNull().default(''),
+  setupComplete: integer('setup_complete').notNull().default(1),
+  deletionScheduledAtMs: bigint('deletion_scheduled_at_ms', { mode: 'number' }),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
@@ -33,6 +39,10 @@ export const campaigns = pgTable('campaigns', {
   countries: text('countries').notNull().default('[]'),
   destinationUrl: text('destination_url').notNull().default(''),
   impressionCredits: integer('impression_credits').notNull().default(0),
+  companyName: text('company_name').notNull().default(''),
+  brandIcon: text('brand_icon').notNull().default(''),
+  pace: text('pace').notNull().default('medium'),
+  emailInvoice: integer('email_invoice').notNull().default(0),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
@@ -57,6 +67,37 @@ export const checkouts = pgTable('checkouts', {
   status: text('status').notNull(),
   provider: text('provider').notNull(),
   mode: text('mode').notNull(),
+  pace: text('pace').notNull().default('medium'),
+  emailInvoice: integer('email_invoice').notNull().default(0),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const magicLinks = pgTable('magic_links', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+  consumedAtMs: bigint('consumed_at_ms', { mode: 'number' }),
+})
+
+export const privacyRequests = pgTable('privacy_requests', {
+  id: text('id').primaryKey(),
+  userId: text('user_id'),
+  kind: text('kind').notNull(),
+  email: text('email').notNull(),
+  region: text('region').notNull().default(''),
+  details: text('details').notNull().default(''),
+  authorizedAgent: integer('authorized_agent').notNull().default(0),
+  verification: text('verification').notNull(),
+  createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
+})
+
+export const contactMessages = pgTable('contact_messages', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  topic: text('topic').notNull(),
+  message: text('message').notNull(),
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 

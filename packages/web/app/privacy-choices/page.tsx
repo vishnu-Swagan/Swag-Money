@@ -1,5 +1,7 @@
+import Link from 'next/link'
+import { PrivacyForm } from '../../components/privacy-form'
 import { SiteFooter, SiteNav } from '../../components/nav'
-import { privacyChoice } from '../actions'
+import { apiJson } from '../../lib/api'
 
 export default async function PrivacyChoicesPage({
   searchParams,
@@ -7,28 +9,31 @@ export default async function PrivacyChoicesPage({
   searchParams: Promise<{ notice?: string }>
 }) {
   const query = await searchParams
+  const me = await apiJson<{ email: string }>('/v1/me')
   return (
     <>
-      <SiteNav />
-      <main id="content" className="wrap gate">
-        <p className="kicker">Privacy choices</p>
-        <h1>Access, correction, deletion.</h1>
-        <p className="dek">
-          This form does not store what you type. Submitting it only confirms that a production deployment would have to honor the request. In this demo, delete the local <span className="mono">data/</span> directory to erase the ledger.
+      <SiteNav signedIn={me.ok} />
+      <main id="content" className="wrap page-pad prose">
+        <p className="kicker">Your Privacy Choices</p>
+        <h1>Your privacy choices</h1>
+        <p>
+          Ask for access, a correction, deletion, an appeal, or an opt-out of sale or sharing. You do not need an account.
+          We will not treat you worse for asking. You can also email <a href="mailto:privacy@swagmoney.ai">privacy@swagmoney.ai</a>.
         </p>
-        {query.notice === 'received' ? <p className="banner ok">Nothing was saved. The fields were discarded on the server.</p> : null}
-        <form className="panel" action={privacyChoice}>
-          <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" required />
-          <label htmlFor="kind">Request</label>
-          <select id="kind" name="kind" defaultValue="delete">
-            <option value="access">Access</option>
-            <option value="correct">Correct</option>
-            <option value="delete">Delete</option>
-            <option value="do-not-sell">Do not sell or share</option>
-          </select>
-          <button className="button" type="submit">Submit without storing</button>
-        </form>
+        <p>
+          Swag-Money does not sell or share personal data, and it has no mode that uploads prompts or code.
+          The “do not sell or share” choice is still here so the request can be recorded.
+        </p>
+        {query.notice === 'received' ? (
+          <p className="banner ok">The request is stored. If you could not sign in, email verification stays pending. This build does not send mail.</p>
+        ) : null}
+        <PrivacyForm signedIn={me.ok} email={me.ok ? me.data.email : undefined} />
+        <h2>How we handle your request</h2>
+        <p>
+          The request is stored with the time it arrived. We match it to the account email when you are signed in, or we hold it until the email is confirmed.
+          This demo does not send that confirmation. If a request is denied, appeal here or email privacy@swagmoney.ai with “Appeal” in the subject.
+        </p>
+        <p><Link href="/privacy">Privacy policy</Link></p>
       </main>
       <SiteFooter />
     </>

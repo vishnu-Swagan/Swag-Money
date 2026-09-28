@@ -151,7 +151,7 @@ pnpm swag-money apply
 
 `pnpm swag-money` is the in-repo form of `npx swag-money`. This repository does not publish the package.
 
-Public pages: `/` (ledger strip from `GET /v1/public/stats`), `/integrations`, `/install` and `/install/[tool]`, `/advertise` (mock block checkout), `/surface-pricing`, `/api-docs`, `/faq`, `/login`, `/signup`, `/terms`, `/privacy`, `/privacy-choices`, `/security`.
+Public pages: `/` (ledger strip from `GET /v1/public/stats`, a short Kickbacks comparison, and the buy form), `/compare`, `/integrations`, `/install` and `/install/[tool]`, `/advertise` (mock block checkout), `/surface-pricing`, `/api-docs`, `/faq`, `/login`, `/signup`, `/terms`, `/privacy`, `/privacy-choices`, `/contact`, `/security`. Comparison claims are dated September 2026 and link to public sources. Beta and scaffold tools stay labeled. Form posts are stored locally; card checkout, magic-link mail, and Google sign-in are not live.
 
 Claude Code, end to end, against that API:
 

@@ -32,6 +32,7 @@ import {
   type AuctionCandidate,
 } from '@swag-money/shared'
 import { registerCommerce } from './commerce.ts'
+import { registerIntake } from './intake.ts'
 import type { SwagDb } from './db.ts'
 import { hashApiKey } from './passwords.ts'
 import { settlePayout, PayoutProviderError, type PayoutEnv, type PayoutProviderId } from './payouts.ts'
@@ -168,7 +169,18 @@ export function createApp(deps: {
   app.get('/v1/me', (c) => {
     const user = c.get('user')
     if (!user) return c.json({ error: 'Sign in required', code: 'unauthorized' }, 401)
-    return c.json({ id: user.id, email: user.email, name: user.name, role: user.role })
+    return c.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      setupComplete: user.setupComplete === 1,
+      residenceCountry: user.residenceCountry,
+      newsOptIn: user.newsOptIn === 1,
+      payoutPreference: user.payoutPreference,
+      ageConfirmed: user.ageConfirmed === 1,
+      deletionScheduledAtMs: user.deletionScheduledAtMs,
+    })
   })
 
   app.post('/v1/installs', async (c) => {
@@ -670,6 +682,12 @@ export function createApp(deps: {
     clock,
     sessionSecret: env.sessionSecret,
     developerShareBps,
+  })
+  registerIntake(app, {
+    db,
+    clock,
+    sessionSecret: env.sessionSecret,
+    allowDemo: env.allowDemo,
   })
 
   return app

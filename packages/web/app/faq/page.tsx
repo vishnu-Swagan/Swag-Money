@@ -84,7 +84,7 @@ export default function FaqPage() {
         <h1>Questions</h1>
         {GROUPS.map((group) => (
           <section key={group.title} className="band">
-            <h2>{group.title}</h2>
+            <h2 id={group.title === 'Earnings' ? 'payouts' : undefined}>{group.title}</h2>
             {group.items.map((item) => (
               <details key={item.q} className="faq">
                 <summary>{item.q}</summary>
