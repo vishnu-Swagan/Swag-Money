@@ -18,6 +18,12 @@ SWAG_PUBLIC_SITE_URL=http://127.0.0.1:8788
 # SWAG_ENV=production
 # SWAG_DEVELOPER_SHARE_BPS=5000
 
+# Private /admin desk. Comma-separated. Unset means /admin 404s for everyone.
+# ADMIN_EMAILS=
+# Mock advertiser-signup notice. Off unless both are set. Writes crm_mail_outbox only.
+# ADMIN_NOTIFY_ADVERTISERS=1
+# ADMIN_NOTIFY_EMAIL=
+
 # Leave payment keys empty. Live Stripe and Razorpay keys are refused.
 # STRIPE_SECRET_KEY=
 # STRIPE_CONNECT_CLIENT_ID=

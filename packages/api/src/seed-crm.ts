@@ -1,5 +1,4 @@
 import { eq } from 'drizzle-orm'
-import { isHosted } from './config.ts'
 import type { SwagDb } from './db.ts'
 import { DEMO_ADVERTISER, DEMO_DEVELOPER } from './seed.ts'
 import {
@@ -28,10 +27,10 @@ const SARA = '00000000-0000-4000-8000-00000000f213'
 const THEO = '00000000-0000-4000-8000-00000000f214'
 const YARA = '00000000-0000-4000-8000-00000000f215'
 
-/** Local and Vercel preview only. Production (VERCEL_ENV or SWAG_ENV) never receives this fixture. */
+/** Local `pnpm dev`, and a Vercel preview if one is configured. The Worker sets SWAG_ENV=production and never receives this fixture. */
 export function crmSeedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.SWAG_ENV === 'production' || env.VERCEL_ENV === 'production') return false
-  if (isHosted(env) && env.VERCEL_ENV !== 'preview') return false
+  if (env.VERCEL && env.VERCEL_ENV !== 'preview') return false
   return true
 }
 

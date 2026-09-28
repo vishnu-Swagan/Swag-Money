@@ -20,6 +20,9 @@ const RUNTIME_KEYS = [
   'ANTHROPIC_API_KEY',
   'RAZORPAYX_KEY_ID',
   'RAZORPAYX_KEY_SECRET',
+  'ADMIN_EMAILS',
+  'ADMIN_NOTIFY_ADVERTISERS',
+  'ADMIN_NOTIFY_EMAIL',
 ] as const
 
 /** Copy Worker bindings onto process.env. Hyperdrive, when bound, replaces DATABASE_URL. */
