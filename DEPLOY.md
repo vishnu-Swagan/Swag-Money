@@ -81,6 +81,25 @@ Optional Hyperdrive: create a Hyperdrive config pointed at the same Neon databas
 
 There is no cron trigger. Nothing in this app sweeps payouts or rolls up stats on a timer. Those totals are computed from the ledger when a page asks for them.
 
+### Admin CRM
+
+`/admin` is not linked from the public site. Set a plain Worker variable:
+
+| Name | Value |
+| --- | --- |
+| `ADMIN_EMAILS` | Comma-separated emails, for example `you@swagmoney.ai` |
+
+Sign in on the normal login page with one of those emails, then open `/admin`. Every other account gets a 404. Deploys use `--keep-vars`, and `ADMIN_EMAILS` is not in `wrangler.jsonc`, so a later deploy does not clear it.
+
+Optional, off unless you set it:
+
+| Name | Value |
+| --- | --- |
+| `SWAG_ADMIN_NOTIFY` | `1` to record a mock notice when an advertiser signs up. Unset or `0` does nothing. |
+| `SWAG_ADMIN_NOTIFY_TO` | The address the notice is addressed to. |
+
+The mock adapter writes a row and does not send mail. To send real mail, keep those two variables and replace `notifyAdvertiserSignup` in `packages/api/src/notify.ts` with a provider call (Resend or SMTP). Do not put the provider secret in `wrangler.jsonc`. Use `wrangler secret put`. This repository does not include that provider.
+
 ## 4. Migrations
 
 Migrations run in Node, against `DATABASE_URL`. They do not run when the Worker starts.

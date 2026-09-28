@@ -4,7 +4,8 @@ import { runEnglishAuction, splitRevenue, type AuctionCandidate } from '@swag-mo
 import { isHosted } from './config.ts'
 import type { SwagDb } from './db.ts'
 import { hashPassword } from './passwords.ts'
-import { campaigns, impressions, installs, ledger, users } from './schema.ts'
+import { advertiserCrm, campaigns, contactMessages, crmNotes, crmTags, impressions, installs, ledger, users } from './schema.ts'
+import { recordLead } from './leads.ts'
 
 /** Local demo fixture. Not a production credential. */
 export const DEMO_PASSWORD = 'swag-demo'
@@ -224,6 +225,7 @@ export async function seedIfEmpty(db: SwagDb, now: number, env: NodeJS.ProcessEn
 
   await db.insert(impressions).values(impressionRows)
   await db.insert(ledger).values(ledgerRows)
+  await seedCrmDemo(db, now, env)
   await db
     .update(campaigns)
     .set({
@@ -231,4 +233,59 @@ export async function seedIfEmpty(db: SwagDb, now: number, env: NodeJS.ProcessEn
       reservedCents: winner.priceCents,
     })
     .where(eq(campaigns.id, NORTHWIND))
+}
+
+const DEMO_NOTE = '00000000-0000-4000-8000-0000000000e1'
+const DEMO_TAG = '00000000-0000-4000-8000-0000000000e2'
+const DEMO_CONTACT = '00000000-0000-4000-8000-0000000000e3'
+
+/** CRM rows for the local Ada/Lin fixture. Refuses to run when SWAG_ENV=production. */
+export async function seedCrmDemo(db: SwagDb, now: number, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  if (isHosted(env)) {
+    throw new Error('Refusing to seed demo CRM data in production. Demo notes are a local development fixture.')
+  }
+  const [ada] = await db.select().from(users).where(eq(users.id, DEMO_DEVELOPER.id))
+  const [lin] = await db.select().from(users).where(eq(users.id, DEMO_ADVERTISER.id))
+  if (!ada || !lin) return
+  const [note] = await db.select().from(crmNotes).where(eq(crmNotes.id, DEMO_NOTE))
+  if (note) return
+  await db.insert(crmNotes).values({
+    id: DEMO_NOTE,
+    subjectType: 'developer',
+    subjectId: ada.id,
+    authorId: ada.id,
+    body: 'Local demo note. This row is not created in production.',
+    createdAtMs: now,
+  })
+  await db.insert(crmTags).values({
+    id: DEMO_TAG,
+    subjectType: 'developer',
+    subjectId: ada.id,
+    tag: 'local-demo',
+    createdAtMs: now,
+  })
+  await db.insert(advertiserCrm).values({
+    userId: lin.id,
+    stage: 'active',
+    ownerEmail: '',
+    followUpAtMs: now + 7 * 86_400_000,
+    updatedAtMs: now,
+  })
+  await db.insert(contactMessages).values({
+    id: DEMO_CONTACT,
+    name: 'Northwind sales',
+    email: 'hello@northwind.example',
+    topic: 'advertiser',
+    message: 'Local demo enquiry. Not seeded in production.',
+    createdAtMs: now,
+  })
+  await recordLead(db, {
+    source: 'advertiser_form',
+    sourceId: DEMO_CONTACT,
+    name: 'Northwind sales',
+    email: 'hello@northwind.example',
+    topic: 'advertiser',
+    body: 'Local demo enquiry. Not seeded in production.',
+    createdAtMs: now,
+  })
 }

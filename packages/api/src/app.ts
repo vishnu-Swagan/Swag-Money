@@ -31,7 +31,9 @@ import {
   splitRevenue,
   type AuctionCandidate,
 } from '@swag-money/shared'
+import { registerAdmin } from './admin.ts'
 import { registerCommerce } from './commerce.ts'
+import { isSuspended } from './flags.ts'
 import { registerIntake } from './intake.ts'
 import type { SwagDb } from './db.ts'
 import { hashApiKey } from './passwords.ts'
@@ -51,6 +53,9 @@ export type AppEnv = PayoutEnv & {
   impressionTtlMs: number
   sessionSecret: string
   developerShareBps?: number
+  adminEmails?: readonly string[]
+  notifyAdvertiserSignups?: boolean
+  notifyTo?: string
 }
 
 type Vars = { user: UserRow | undefined }
@@ -430,6 +435,9 @@ export function createApp(deps: {
     if (replayed) return c.json({ error: 'Request nonce already used', code: 'replay' }, 409)
     const [install] = await db.select().from(installs).where(eq(installs.id, installId))
     if (!install) return c.json({ error: 'Unknown install', code: 'not_found' }, 404)
+    if (await isSuspended(db, install.userId)) {
+      return c.json({ error: 'This account is suspended.', code: 'forbidden' }, 403)
+    }
     const requestMessage = canonicalAdRequest({ installId, surface, requestNonce, signedAt })
     let deviceKey: Uint8Array
     try {
@@ -694,12 +702,25 @@ export function createApp(deps: {
     clock,
     sessionSecret: env.sessionSecret,
     developerShareBps,
+    adminEmails: env.adminEmails ?? [],
+    notifyAdvertiserSignups: env.notifyAdvertiserSignups === true,
+    notifyTo: env.notifyTo ?? '',
   })
   registerIntake(app, {
     db,
     clock,
     sessionSecret: env.sessionSecret,
     allowDemo: env.allowDemo,
+    adminEmails: env.adminEmails ?? [],
+    notifyAdvertiserSignups: env.notifyAdvertiserSignups === true,
+    notifyTo: env.notifyTo ?? '',
+  })
+  registerAdmin(app, {
+    db,
+    clock,
+    adminEmails: env.adminEmails ?? [],
+    notifyAdvertiserSignups: env.notifyAdvertiserSignups === true,
+    notifyTo: env.notifyTo ?? '',
   })
 
   return app

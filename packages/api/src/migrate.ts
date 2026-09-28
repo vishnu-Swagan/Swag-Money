@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
 import { isHosted } from './config.ts'
-import { migrationStatements } from './migration-sql.ts'
+import { SCHEMA_VERSION, migrationStatements } from './migration-sql.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 loadDotEnv(path.join(repoRoot, '.env'))
@@ -32,7 +32,12 @@ try {
   for (const statement of migrationStatements()) {
     await sql.unsafe(statement)
   }
-  console.log('Migrations applied.')
+  await sql`
+    INSERT INTO schema_migrations (version, applied_at_ms)
+    VALUES (${SCHEMA_VERSION}, ${Date.now()})
+    ON CONFLICT (version) DO UPDATE SET applied_at_ms = EXCLUDED.applied_at_ms
+  `
+  console.log(`Migrations applied (${SCHEMA_VERSION}).`)
 } finally {
   await sql.end({ timeout: 5 })
 }

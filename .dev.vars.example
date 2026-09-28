@@ -18,6 +18,13 @@ SWAG_PUBLIC_SITE_URL=http://127.0.0.1:8788
 # SWAG_ENV=production
 # SWAG_DEVELOPER_SHARE_BPS=5000
 
+# Comma-separated admin emails. Sign in as one of these, then open /admin.
+ADMIN_EMAILS=
+
+# Leave at 0. Set to 1 only to record mock advertiser-signup emails.
+SWAG_ADMIN_NOTIFY=0
+SWAG_ADMIN_NOTIFY_TO=
+
 # Leave payment keys empty. Live Stripe and Razorpay keys are refused.
 # STRIPE_SECRET_KEY=
 # STRIPE_CONNECT_CLIENT_ID=

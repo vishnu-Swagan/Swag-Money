@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   payout_preference text NOT NULL DEFAULT '',
   setup_complete integer NOT NULL DEFAULT 1,
   deletion_scheduled_at_ms bigint,
+  signup_method text NOT NULL DEFAULT 'email',
   created_at_ms bigint NOT NULL
 );
 CREATE TABLE IF NOT EXISTS installs (
@@ -157,7 +158,81 @@ CREATE TABLE IF NOT EXISTS request_nonces (
   seen_at_ms bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS request_nonces_install_idx ON request_nonces (install_id, seen_at_ms);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_method text NOT NULL DEFAULT 'email';
+CREATE TABLE IF NOT EXISTS crm_notes (
+  id text PRIMARY KEY,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  author_id text NOT NULL,
+  body text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS crm_notes_subject_idx ON crm_notes (subject_type, subject_id, created_at_ms);
+CREATE TABLE IF NOT EXISTS crm_tags (
+  id text PRIMARY KEY,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  tag text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS crm_tags_subject_idx ON crm_tags (subject_type, subject_id, tag);
+CREATE TABLE IF NOT EXISTS advertiser_crm (
+  user_id text PRIMARY KEY REFERENCES users(id),
+  stage text NOT NULL,
+  owner_email text NOT NULL DEFAULT '',
+  follow_up_at_ms bigint,
+  updated_at_ms bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS leads (
+  id text PRIMARY KEY,
+  source text NOT NULL,
+  source_id text NOT NULL,
+  name text NOT NULL DEFAULT '',
+  email text NOT NULL DEFAULT '',
+  topic text NOT NULL DEFAULT '',
+  body text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'new',
+  created_at_ms bigint NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_source_idx ON leads (source, source_id);
+CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at_ms);
+CREATE TABLE IF NOT EXISTS user_flags (
+  user_id text PRIMARY KEY REFERENCES users(id),
+  suspended integer NOT NULL DEFAULT 0,
+  payout_reviewed integer NOT NULL DEFAULT 0,
+  updated_at_ms bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id text PRIMARY KEY,
+  actor_id text NOT NULL,
+  actor_email text NOT NULL,
+  action text NOT NULL,
+  subject_type text NOT NULL,
+  subject_id text NOT NULL,
+  detail text NOT NULL DEFAULT '',
+  created_at_ms bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_audit_created_idx ON admin_audit_log (created_at_ms);
+CREATE TABLE IF NOT EXISTS admin_notifications (
+  id text PRIMARY KEY,
+  kind text NOT NULL,
+  to_email text NOT NULL DEFAULT '',
+  subject text NOT NULL,
+  body text NOT NULL,
+  adapter text NOT NULL,
+  created_at_ms bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version text PRIMARY KEY,
+  applied_at_ms bigint NOT NULL
+);
+INSERT INTO schema_migrations (version, applied_at_ms)
+VALUES ('2026-09-28-crm', 0)
+ON CONFLICT (version) DO NOTHING;
 `
+
+/** Recorded by the migration SQL. `pnpm db:migrate` stamps applied_at_ms. */
+export const SCHEMA_VERSION = '2026-09-28-crm'
 
 /** Statements in order. Split so a transaction-mode pooler can run them one at a time. */
 export function migrationStatements(): string[] {

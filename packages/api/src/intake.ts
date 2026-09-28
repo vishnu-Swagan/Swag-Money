@@ -7,7 +7,11 @@ import {
   validatePrivacyRequest,
   validateSetup,
 } from '@swag-money/shared'
+import { isAdminEmail } from './admin-mask.ts'
 import type { SwagDb } from './db.ts'
+import { isSuspended } from './flags.ts'
+import { recordLead } from './leads.ts'
+import { notifyAdvertiserSignup } from './notify.ts'
 import { hashApiKey } from './passwords.ts'
 import { contactMessages, magicLinks, privacyRequests, users } from './schema.ts'
 import { signSession } from './session.ts'
@@ -19,7 +23,15 @@ const DELETION_HOLD_MS = 30 * 24 * 60 * 60 * 1000
 
 export function registerIntake(
   app: Hono<{ Variables: Vars }>,
-  deps: { db: SwagDb; clock: { now(): number }; sessionSecret: string; allowDemo: boolean },
+  deps: {
+    db: SwagDb
+    clock: { now(): number }
+    sessionSecret: string
+    allowDemo: boolean
+    adminEmails?: readonly string[]
+    notifyAdvertiserSignups?: boolean
+    notifyTo?: string
+  },
 ) {
   const { db, clock, sessionSecret, allowDemo } = deps
 
@@ -40,16 +52,36 @@ export function registerIntake(
     const [existing] = await db.select().from(users).where(eq(users.email, email))
     if (!existing) {
       const local = email.split('@')[0]?.replace(/[^A-Za-z0-9 ._-]/g, '').slice(0, 60) || 'Developer'
+      const id = crypto.randomUUID()
       await db.insert(users).values({
-        id: crypto.randomUUID(),
+        id,
         email,
         name: local,
         role,
         passwordHash: '',
+        signupMethod: 'email',
         ageConfirmed: role === 'developer' ? 1 : 0,
         setupComplete: role === 'advertiser' ? 1 : 0,
         createdAtMs: clock.now(),
       })
+      await recordLead(db, {
+        source: 'signup',
+        sourceId: id,
+        name: local,
+        email,
+        topic: role,
+        body: '',
+        createdAtMs: clock.now(),
+      })
+      if (role === 'advertiser') {
+        await notifyAdvertiserSignup(db, {
+          enabled: deps.notifyAdvertiserSignups === true,
+          toEmail: deps.notifyTo ?? '',
+          advertiserEmail: email,
+          name: local,
+          now: clock.now(),
+        })
+      }
     } else if (body.role === 'advertiser' && existing.role !== 'advertiser') {
       return c.json({ error: 'That email belongs to a developer account.', code: 'conflict' }, 409)
     } else if (role === 'developer' && existing.ageConfirmed !== 1) {
@@ -82,6 +114,9 @@ export function registerIntake(
     if (!link) return c.json({ error: 'That sign-in link has expired or was already used.', code: 'unauthorized' }, 401)
     const [user] = await db.select().from(users).where(eq(users.email, link.email))
     if (!user) return c.json({ error: 'That sign-in link has expired or was already used.', code: 'unauthorized' }, 401)
+    if ((await isSuspended(db, user.id)) && !isAdminEmail(user.email, deps.adminEmails ?? [])) {
+      return c.json({ error: 'This account is suspended.', code: 'forbidden' }, 403)
+    }
     await db.update(magicLinks).set({ consumedAtMs: clock.now() }).where(eq(magicLinks.id, link.id))
     return c.json({
       token: signSession(user.id, sessionSecret),
@@ -150,8 +185,9 @@ export function registerIntake(
         return c.json({ error: 'Use the email on this account, or choose email verification.', errors: { email: 'Email does not match the signed-in account' }, code: 'bad_request' }, 400)
       }
     }
+    const privacyId = crypto.randomUUID()
     await db.insert(privacyRequests).values({
-      id: crypto.randomUUID(),
+      id: privacyId,
       userId: parsed.value.path === 'session' ? user?.id ?? null : null,
       kind: parsed.value.kind,
       email: parsed.value.email,
@@ -159,6 +195,15 @@ export function registerIntake(
       details: parsed.value.details,
       authorizedAgent: parsed.value.authorizedAgent ? 1 : 0,
       verification: parsed.value.path === 'session' ? 'session' : 'email_pending',
+      createdAtMs: clock.now(),
+    })
+    await recordLead(db, {
+      source: 'privacy',
+      sourceId: privacyId,
+      name: '',
+      email: parsed.value.email,
+      topic: parsed.value.kind,
+      body: parsed.value.details,
       createdAtMs: clock.now(),
     })
     return c.json({
@@ -185,12 +230,22 @@ export function registerIntake(
       return c.json({ error: Object.values(parsed.errors)[0] ?? 'Check the form', errors: parsed.errors, code: 'bad_request' }, 400)
     }
     if ('discarded' in parsed) return c.json({ accepted: true, stored: false })
+    const contactId = crypto.randomUUID()
     await db.insert(contactMessages).values({
-      id: crypto.randomUUID(),
+      id: contactId,
       name: parsed.value.name,
       email: parsed.value.email,
       topic: parsed.value.topic,
       message: parsed.value.message,
+      createdAtMs: clock.now(),
+    })
+    await recordLead(db, {
+      source: parsed.value.topic === 'advertiser' ? 'advertiser_form' : 'contact',
+      sourceId: contactId,
+      name: parsed.value.name,
+      email: parsed.value.email,
+      topic: parsed.value.topic,
+      body: parsed.value.message,
       createdAtMs: clock.now(),
     })
     return c.json({ accepted: true, stored: true, detail: 'Stored locally. No mail was sent.' }, 201)
