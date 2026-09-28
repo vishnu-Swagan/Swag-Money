@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { validateBuyPayload, validateContact, validatePrivacyRequest, validateSetup } from '@swag-money/shared'
-import { API_URL } from '../lib/api'
+import { api } from '../lib/api'
 
 async function token(): Promise<string | undefined> {
   const jar = await cookies()
@@ -15,7 +15,7 @@ export async function signIn(formData: FormData) {
   const next = String(formData.get('next') ?? '')
   let response: Response
   try {
-    response = await fetch(`${API_URL}/v1/demo/session`, {
+    response = await api(`/v1/demo/session`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email }),
@@ -42,7 +42,7 @@ export async function createCampaign(formData: FormData) {
   const surfaces = formData.getAll('surfaces').map(String)
   let response: Response
   try {
-    response = await fetch(`${API_URL}/v1/campaigns`, {
+    response = await api(`/v1/campaigns`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -79,7 +79,7 @@ export async function updateCampaign(formData: FormData) {
   } catch (error) {
     redirect(`/advertisers?error=${encodeURIComponent(error instanceof Error ? error.message : 'Invalid bid')}`)
   }
-  const response = await fetch(`${API_URL}/v1/campaigns/${id}`, {
+  const response = await api(`/v1/campaigns/${id}`, {
     method: 'PATCH',
     headers: {
       'content-type': 'application/json',
@@ -97,7 +97,7 @@ export async function updateCampaign(formData: FormData) {
 
 export async function requestPayout(formData: FormData) {
   const provider = String(formData.get('provider') ?? '')
-  const response = await fetch(`${API_URL}/v1/payouts`, {
+  const response = await api(`/v1/payouts`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -126,7 +126,7 @@ export async function googleSignIn(formData: FormData) {
 
 export async function loginAccount(formData: FormData) {
   if (formData.get('adult') !== 'yes') redirect('/login?error=adult')
-  const response = await fetch(`${API_URL}/v1/auth/login`, {
+  const response = await api(`/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -147,7 +147,7 @@ export async function loginAccount(formData: FormData) {
 
 export async function signupAccount(formData: FormData) {
   if (formData.get('adult') !== 'yes') redirect('/signup?error=Confirm%20that%20you%20are%2018%20or%20older%20and%20agree%20to%20the%20terms.')
-  const response = await fetch(`${API_URL}/v1/auth/signup`, {
+  const response = await api(`/v1/auth/signup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -183,7 +183,7 @@ export async function checkoutBlocks(_prev: FormState, formData: FormData): Prom
   }
   let response: Response
   try {
-    response = await fetch(`${API_URL}/v1/checkout`, {
+    response = await api(`/v1/checkout`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -221,7 +221,7 @@ export async function requestMagicLink(_prev: MagicState, formData: FormData): P
   if (formData.get('adult') !== 'yes') {
     return { error: 'Confirm that you are 18 or older and agree to the terms.' }
   }
-  const response = await fetch(`${API_URL}/v1/auth/magic-link`, {
+  const response = await api(`/v1/auth/magic-link`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -241,7 +241,7 @@ export async function requestMagicLink(_prev: MagicState, formData: FormData): P
 }
 
 export async function consumeMagicLink(formData: FormData) {
-  const response = await fetch(`${API_URL}/v1/auth/magic-link/consume`, {
+  const response = await api(`/v1/auth/magic-link/consume`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ token: String(formData.get('token') ?? '') }),
@@ -262,7 +262,7 @@ export async function completeSetup(_prev: FormState, formData: FormData): Promi
     payoutPreference: String(formData.get('payoutPreference') ?? ''),
   })
   if (!parsed.ok) return { errors: parsed.errors }
-  const response = await fetch(`${API_URL}/v1/auth/setup`, {
+  const response = await api(`/v1/auth/setup`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -281,7 +281,7 @@ export async function completeSetup(_prev: FormState, formData: FormData): Promi
 }
 
 export async function reactivateAccount() {
-  await fetch(`${API_URL}/v1/account/deletion`, {
+  await api(`/v1/account/deletion`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -312,7 +312,7 @@ export async function submitPrivacy(_prev: FormState, formData: FormData): Promi
   })
   if (!parsed.ok) return { errors: parsed.errors }
   if ('discarded' in parsed) redirect('/privacy-choices?notice=received')
-  const response = await fetch(`${API_URL}/v1/privacy-requests`, {
+  const response = await api(`/v1/privacy-requests`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -342,7 +342,7 @@ export async function submitContact(_prev: FormState, formData: FormData): Promi
   })
   if (!parsed.ok) return { errors: parsed.errors }
   if ('discarded' in parsed) redirect('/contact?notice=received')
-  const response = await fetch(`${API_URL}/v1/contact`, {
+  const response = await api(`/v1/contact`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(parsed.value),
@@ -377,7 +377,7 @@ function buyDraft(formData: FormData) {
 }
 
 async function openAdvertiserSession(email: string): Promise<{ token: string } | { errors: Record<string, string> }> {
-  const sent = await fetch(`${API_URL}/v1/auth/magic-link`, {
+  const sent = await api(`/v1/auth/magic-link`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, role: 'advertiser' }),
@@ -387,7 +387,7 @@ async function openAdvertiserSession(email: string): Promise<{ token: string } |
   if (!sent.ok || !link?.devToken) {
     return { errors: { email: link?.error ?? 'Sign in on the login page, then come back to buy.' } }
   }
-  const consumed = await fetch(`${API_URL}/v1/auth/magic-link/consume`, {
+  const consumed = await api(`/v1/auth/magic-link/consume`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ token: link.devToken }),

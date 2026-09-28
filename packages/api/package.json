@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./http": "./src/http.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -21,6 +22,7 @@
     "@swag-money/crypto": "workspace:*",
     "@swag-money/shared": "workspace:*",
     "drizzle-orm": "^0.44.5",
-    "hono": "^4.9.6"
+    "hono": "^4.9.6",
+    "postgres": "^3.4.7"
   }
 }

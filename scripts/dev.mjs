@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+process.env.SWAG_API_URL ??= 'http://127.0.0.1:8787'
 
 function run(command, args) {
   const child = spawn(command, args, {

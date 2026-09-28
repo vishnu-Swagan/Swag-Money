@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { BuyForm } from '../components/buy-form'
 import { CopyCommand } from '../components/copy-command'
 import { SiteFooter, SiteNav } from '../components/nav'
-import { API_URL, apiJson } from '../lib/api'
+import { api, apiJson } from '../lib/api'
 import { COMPARE_NOTE, COMPARE_ROWS } from '../lib/compare'
 import { signIn } from './actions'
 
@@ -262,7 +262,7 @@ export default async function HomePage({
 
 async function loadStats(): Promise<PublicStats | null> {
   try {
-    const response = await fetch(`${API_URL}/v1/public/stats`, { cache: 'no-store' })
+    const response = await api('/v1/public/stats')
     if (!response.ok) return null
     const body = (await response.json()) as PublicStats
     if (body.source !== 'ledger' || !Number.isInteger(body.verifiedImpressions)) return null

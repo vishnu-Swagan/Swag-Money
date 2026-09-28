@@ -44,6 +44,24 @@ export function loadSigningKey(dataDir: string, envPrivate: string | undefined):
   return generated
 }
 
+/** Production and the Next.js server read the seed from the environment and never write a key file. */
+export function loadSigningKeyFromEnv(envPrivate: string | undefined): {
+  privateKey: Uint8Array
+  publicKey: Uint8Array
+} {
+  const trimmed = envPrivate?.trim()
+  if (!trimmed || trimmed === 'replace-me') {
+    throw new Error(
+      'SWAG_SIGNING_PRIVATE_KEY is required when the API runs inside Next.js. Generate one with pnpm keys. See DEPLOY.md.',
+    )
+  }
+  const privateKey = b64UrlToBytes(trimmed)
+  if (privateKey.length !== 32) {
+    throw new Error('SWAG_SIGNING_PRIVATE_KEY must be a base64url 32-byte seed')
+  }
+  return { privateKey, publicKey: publicKeyFromPrivate(privateKey) }
+}
+
 export function loadSessionSecret(dataDir: string, envSecret: string | undefined): string {
   if (envSecret && envSecret.trim() && envSecret.trim() !== 'replace-with-a-long-random-string') {
     return envSecret.trim()

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { bytesToB64Url, generateEd25519KeyPair, randomHex } from '@swag-money/crypto'
 import { runEnglishAuction, splitRevenue, type AuctionCandidate } from '@swag-money/shared'
+import { isHosted } from './config.ts'
 import type { SwagDb } from './db.ts'
 import { hashPassword } from './passwords.ts'
 import { campaigns, impressions, installs, ledger, users } from './schema.ts'
@@ -29,7 +30,10 @@ function demoId(n: number): string {
   return `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`
 }
 
-export async function ensureDemoPasswords(db: SwagDb): Promise<void> {
+export async function ensureDemoPasswords(db: SwagDb, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  if (isHosted(env)) {
+    throw new Error('Refusing to write demo passwords in production. Demo users are a local development fixture.')
+  }
   const hash = hashPassword(DEMO_PASSWORD)
   for (const person of [DEMO_DEVELOPER, DEMO_ADVERTISER]) {
     const [user] = await db.select().from(users).where(eq(users.id, person.id))
@@ -39,7 +43,10 @@ export async function ensureDemoPasswords(db: SwagDb): Promise<void> {
   }
 }
 
-export async function seedIfEmpty(db: SwagDb, now: number): Promise<void> {
+export async function seedIfEmpty(db: SwagDb, now: number, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  if (isHosted(env)) {
+    throw new Error('Refusing to seed demo users in production. seedIfEmpty is a local development command.')
+  }
   const existing = await db.select({ id: users.id }).from(users).limit(1)
   if (existing.length > 0) return
 

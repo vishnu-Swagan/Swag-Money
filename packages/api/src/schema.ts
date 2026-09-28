@@ -92,6 +92,12 @@ export const privacyRequests = pgTable('privacy_requests', {
   createdAtMs: bigint('created_at_ms', { mode: 'number' }).notNull(),
 })
 
+export const requestNonces = pgTable('request_nonces', {
+  nonce: text('nonce').primaryKey(),
+  installId: text('install_id').notNull(),
+  seenAtMs: bigint('seen_at_ms', { mode: 'number' }).notNull(),
+})
+
 export const contactMessages = pgTable('contact_messages', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

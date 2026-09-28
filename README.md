@@ -26,7 +26,7 @@ packages/adapters
 packages/web           Next.js site, dashboards, install pages, advertiser checkout
 ```
 
-The database is Postgres, embedded with PGlite so `pnpm dev` does not need a server. The schema is ordinary Postgres SQL. This MVP opens PGlite at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Pointing the process at an external database is a driver swap in `packages/api/src/db.ts`.
+Local `pnpm dev` uses embedded Postgres (PGlite) at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Production is one Vercel project: the Next.js app serves the site and `/v1` against hosted Postgres (`DATABASE_URL`). Demo users are not seeded there. See [DEPLOY.md](DEPLOY.md).
 
 ```text
 adapter  --signed request-->  API auction
@@ -125,7 +125,7 @@ No provider key is shipped in the repo. Leave the variables empty.
 
 ## Local setup
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22+ and pnpm 10. Production deployment is [DEPLOY.md](DEPLOY.md).
 
 ```bash
 pnpm install
