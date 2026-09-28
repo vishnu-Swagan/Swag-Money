@@ -5,7 +5,6 @@ import { bytesToB64Url, generateEd25519KeyPair, signTranscript } from '@swag-mon
 import { createApp, type AppEnv, type Clock } from './app.ts'
 import { openDatabase } from './db.ts'
 import { campaigns, impressions, installs, ledger, users } from './schema.ts'
-import { signSession } from './session.ts'
 import { seedIfEmpty } from './seed.ts'
 
 const SECRET = 'test-session-secret'

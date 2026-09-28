@@ -5,12 +5,20 @@ import { fileURLToPath } from 'node:url'
 import { bytesToB64Url, fingerprint } from '@swag-money/crypto'
 import { DEFAULT_DEVELOPER_SHARE_BPS, IMPRESSION_TTL_MS, MIN_VIEW_MS, PAYOUT_MIN_CENTS } from '@swag-money/shared'
 import { createApp } from './app.ts'
+import { isHosted } from './config.ts'
 import { openDatabase } from './db.ts'
 import { loadSessionSecret, loadSigningKey } from './keys.ts'
+import { seedCrmDemo } from './seed-crm.ts'
 import { DEMO_ADVERTISER, DEMO_DEVELOPER, DEMO_PASSWORD, ensureDemoPasswords, seedIfEmpty } from './seed.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 loadDotEnv(path.join(repoRoot, '.env'))
+
+if (isHosted()) {
+  throw new Error(
+    'packages/api/src/main.ts is the local PGlite server. Production serves /v1 from the Next.js app. See DEPLOY.md.',
+  )
+}
 
 const dataDir = path.resolve(process.env.SWAG_DATA_DIR ?? path.join(repoRoot, 'data'))
 const port = Number(process.env.SWAG_API_PORT ?? 8787)
@@ -20,6 +28,7 @@ const sessionSecret = loadSessionSecret(dataDir, process.env.SWAG_SESSION_SECRET
 const database = await openDatabase(path.join(dataDir, 'pg'))
 const clock = { now: () => Date.now() }
 await seedIfEmpty(database.db, clock.now())
+await seedCrmDemo(database.db, clock.now())
 await ensureDemoPasswords(database.db)
 
 const app = createApp({

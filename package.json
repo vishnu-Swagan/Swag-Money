@@ -7,21 +7,33 @@
     "dev": "node scripts/dev.mjs",
     "build": "pnpm -r --if-present run build",
     "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "eslint .",
     "test": "vitest run",
+    "db:migrate": "tsx packages/api/src/migrate.ts",
+    "preview": "pnpm db:migrate && pnpm --filter @swag-money/web preview",
+    "deploy": "pnpm db:migrate && pnpm --filter @swag-money/web deploy",
+    "keys": "pnpm --silent --filter @swag-money/api exec tsx src/keys-cli.ts",
     "demo": "pnpm --filter @swag-money/claude-code demo",
     "swag-money": "tsx packages/installer/src/cli.ts",
     "start:api": "tsx packages/api/src/main.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.21",
+    "eslint": "^10.11.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=22"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
   }
 }

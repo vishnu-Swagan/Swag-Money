@@ -1,6 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { b64UrlToBytes, bytesToB64Url, generateEd25519KeyPair, publicKeyFromPrivate } from '@swag-money/crypto'
+import { loadSigningKeyFromEnv } from './keys-env.ts'
+
+export { loadSigningKeyFromEnv }
 
 export function loadSigningKey(dataDir: string, envPrivate: string | undefined): {
   privateKey: Uint8Array

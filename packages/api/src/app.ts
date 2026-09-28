@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, count, eq, gt, isNull, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {
@@ -31,12 +31,14 @@ import {
   splitRevenue,
   type AuctionCandidate,
 } from '@swag-money/shared'
+import { parseAdminEmails } from './admin-auth.ts'
+import { registerAdmin } from './admin.ts'
 import { registerCommerce } from './commerce.ts'
 import { registerIntake } from './intake.ts'
 import type { SwagDb } from './db.ts'
 import { hashApiKey } from './passwords.ts'
 import { settlePayout, PayoutProviderError, type PayoutEnv, type PayoutProviderId } from './payouts.ts'
-import { apiKeys, campaigns, impressions, installs, ledger, payouts, users } from './schema.ts'
+import { apiKeys, campaigns, impressions, installs, ledger, payouts, requestNonces, users } from './schema.ts'
 import { readSession, signSession } from './session.ts'
 
 type UserRow = typeof users.$inferSelect
@@ -51,6 +53,8 @@ export type AppEnv = PayoutEnv & {
   impressionTtlMs: number
   sessionSecret: string
   developerShareBps?: number
+  /** When omitted, ADMIN_EMAILS from the process environment is used. */
+  adminEmails?: readonly string[]
 }
 
 type Vars = { user: UserRow | undefined }
@@ -90,13 +94,12 @@ export function createApp(deps: {
   signingPublicKey: Uint8Array
 }) {
   const { db, clock, env, signingPrivateKey, signingPublicKey } = deps
+  const adminEmails = env.adminEmails ?? parseAdminEmails(process.env.ADMIN_EMAILS)
   const developerShareBps = env.developerShareBps ?? DEFAULT_DEVELOPER_SHARE_BPS
   if (!Number.isInteger(developerShareBps) || developerShareBps < 0 || developerShareBps > 10_000) {
     throw new Error('developerShareBps must be an integer from 0 to 10000')
   }
   const app = new Hono<{ Variables: Vars }>()
-  const seenRequests = new Set<string>()
-  const requestHits = new Map<string, number[]>()
 
   app.use('*', async (c, next) => {
     c.set('user', undefined)
@@ -132,10 +135,16 @@ export function createApp(deps: {
 
   app.get('/', (c) => c.json({ service: 'swag-money', publicKey: '/v1/public-key' }))
 
-  app.get('/health', async (c) => {
-    await db.execute(sql`select 1 as ok`)
-    return c.json({ ok: true, service: 'swag-money' })
-  })
+  async function reportHealth(): Promise<Response> {
+    try {
+      await db.execute(sql`select 1 as ok`)
+      return Response.json({ ok: true, service: 'swag-money', database: 'up' })
+    } catch {
+      return Response.json({ ok: false, service: 'swag-money', database: 'down' }, { status: 503 })
+    }
+  }
+  app.get('/health', () => reportHealth())
+  app.get('/v1/health', () => reportHealth())
 
   app.get('/v1/public-key', (c) =>
     c.json({
@@ -344,6 +353,7 @@ export function createApp(deps: {
     const user = c.get('user')
     if (!user) return c.json({ error: 'Sign in required', code: 'unauthorized' }, 401)
     if (user.role !== 'developer') return c.json({ error: 'Developer account required', code: 'forbidden' }, 403)
+    if (user.accountStatus === 'suspended') return c.json({ error: 'Developer account is suspended', code: 'suspended' }, 403)
     const body = await readBody(c)
     const provider = body.provider
     const destination = body.destination
@@ -418,11 +428,18 @@ export function createApp(deps: {
     if (Math.abs(clock.now() - signedAt) > 60_000) {
       return c.json({ error: 'signedAt is outside the allowed skew', code: 'skew' }, 401)
     }
-    if (seenRequests.has(requestNonce)) {
-      return c.json({ error: 'Request nonce already used', code: 'replay' }, 409)
-    }
+    const [replayed] = await db
+      .select({ nonce: requestNonces.nonce })
+      .from(requestNonces)
+      .where(eq(requestNonces.nonce, requestNonce))
+      .limit(1)
+    if (replayed) return c.json({ error: 'Request nonce already used', code: 'replay' }, 409)
     const [install] = await db.select().from(installs).where(eq(installs.id, installId))
     if (!install) return c.json({ error: 'Unknown install', code: 'not_found' }, 404)
+    const [developer] = await db.select({ accountStatus: users.accountStatus }).from(users).where(eq(users.id, install.userId))
+    if (developer?.accountStatus === 'suspended') {
+      return c.json({ error: 'Developer account is suspended', code: 'suspended' }, 403)
+    }
     const requestMessage = canonicalAdRequest({ installId, surface, requestNonce, signedAt })
     let deviceKey: Uint8Array
     try {
@@ -436,15 +453,20 @@ export function createApp(deps: {
         401,
       )
     }
-    const hits = (requestHits.get(installId) ?? []).filter((at) => clock.now() - at < 60_000)
-    if (hits.length >= 60) return c.json({ error: 'Install rate limit exceeded', code: 'rate_limit' }, 429)
-    hits.push(clock.now())
-    requestHits.set(installId, hits)
-    seenRequests.add(requestNonce)
-    if (seenRequests.size > 5_000) {
-      const [first] = seenRequests
-      if (first) seenRequests.delete(first)
+    const [rate] = await db
+      .select({ n: count() })
+      .from(requestNonces)
+      .where(and(eq(requestNonces.installId, installId), gt(requestNonces.seenAtMs, clock.now() - 60_000)))
+    if (asNumber(rate?.n ?? 0) >= 60) {
+      return c.json({ error: 'Install rate limit exceeded', code: 'rate_limit' }, 429)
     }
+    const inserted = await db
+      .insert(requestNonces)
+      .values({ nonce: requestNonce, installId, seenAtMs: clock.now() })
+      .onConflictDoNothing()
+      .returning({ nonce: requestNonces.nonce })
+    if (inserted.length === 0) return c.json({ error: 'Request nonce already used', code: 'replay' }, 409)
+    await db.delete(requestNonces).where(lt(requestNonces.seenAtMs, clock.now() - 120_000))
 
     await releaseExpired()
 
@@ -689,6 +711,7 @@ export function createApp(deps: {
     sessionSecret: env.sessionSecret,
     allowDemo: env.allowDemo,
   })
+  registerAdmin(app, { db, clock, adminEmails })
 
   return app
 }

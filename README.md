@@ -26,7 +26,9 @@ packages/adapters
 packages/web           Next.js site, dashboards, install pages, advertiser checkout
 ```
 
-The database is Postgres, embedded with PGlite so `pnpm dev` does not need a server. The schema is ordinary Postgres SQL. This MVP opens PGlite at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Pointing the process at an external database is a driver swap in `packages/api/src/db.ts`.
+Local `pnpm dev` uses embedded Postgres (PGlite) at `data/pg` (or `$SWAG_DATA_DIR/pg`). The signing key and session secret are files next to that directory, not inside it, and all of `data/` is gitignored. Production is one Cloudflare Worker: the Next.js app serves the site and `/v1` against Neon (`DATABASE_URL`). Demo users are not seeded there. See [DEPLOY.md](DEPLOY.md).
+
+`/admin` is a private CRM for the same database: developers, advertisers, the leads inbox, campaigns, payouts, and a read-only table browser. It is not linked from public pages. Set `ADMIN_EMAILS` to the operator addresses. Everyone else gets a 404. New advertiser signups can record a mock email when `ADMIN_NOTIFY_ADVERTISERS=1` and `ADMIN_NOTIFY_EMAIL` are set. That adapter does not send mail.
 
 ```text
 adapter  --signed request-->  API auction
@@ -125,7 +127,7 @@ No provider key is shipped in the repo. Leave the variables empty.
 
 ## Local setup
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22+ and pnpm 10. Production deployment is [DEPLOY.md](DEPLOY.md). `pnpm preview` builds the Worker and serves it locally.
 
 ```bash
 pnpm install

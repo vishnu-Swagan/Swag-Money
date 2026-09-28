@@ -1,0 +1,37 @@
+# Copy to packages/web/.dev.vars for `pnpm preview`. Never commit that file.
+# Wrangler reads it from the Next.js app directory. `pnpm db:migrate` reads it too.
+# Lines here override the vars in wrangler.jsonc for local preview only.
+
+# Local Postgres for preview. Production uses the Neon URL, set with `wrangler secret put`.
+DATABASE_URL=postgres://swag:swag@127.0.0.1:5432/swag
+
+# Paste the three lines from `pnpm -s keys`. Private key and session secret are Worker secrets.
+# The public key is a plain var in production (not a secret).
+SWAG_SIGNING_PRIVATE_KEY=
+SWAG_SIGNING_PUBLIC_KEY=
+SWAG_SESSION_SECRET=
+
+# Preview origin. Production wrangler.jsonc sets https://swagmoney.ai.
+SWAG_PUBLIC_SITE_URL=http://127.0.0.1:8788
+
+# Optional. wrangler.jsonc already sets production and 5000. Uncomment to override locally.
+# SWAG_ENV=production
+# SWAG_DEVELOPER_SHARE_BPS=5000
+
+# Private /admin desk. Comma-separated. Unset means /admin 404s for everyone.
+# ADMIN_EMAILS=
+# Mock advertiser-signup notice. Off unless both are set. Writes crm_mail_outbox only.
+# ADMIN_NOTIFY_ADVERTISERS=1
+# ADMIN_NOTIFY_EMAIL=
+
+# Leave payment keys empty. Live Stripe and Razorpay keys are refused.
+# STRIPE_SECRET_KEY=
+# STRIPE_CONNECT_CLIENT_ID=
+# SOLANA_RPC_URL=
+# SOLANA_PAYOUT_SECRET_KEY=
+# LIGHTNING_NODE_URL=
+# LIGHTNING_MACAROON=
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+# RAZORPAYX_KEY_ID=
+# RAZORPAYX_KEY_SECRET=

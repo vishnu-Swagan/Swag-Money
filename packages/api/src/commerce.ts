@@ -12,6 +12,7 @@ import {
   validateBuyPayload,
   type Surface,
 } from '@swag-money/shared'
+import { notifyAdvertiserSignup, recordLead } from './crm.ts'
 import type { SwagDb } from './db.ts'
 import { generateApiKey, hashPassword, verifyPassword } from './passwords.ts'
 import { apiKeys, campaigns, checkouts, impressions, ledger, users } from './schema.ts'
@@ -81,6 +82,7 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
       const role = body.role === 'advertiser' ? 'advertiser' : body.role === 'developer' ? 'developer' : null
       if (!role) return c.json({ error: 'role must be developer or advertiser', code: 'bad_request' }, 400)
       const id = crypto.randomUUID()
+      const createdAtMs = clock.now()
       await db.insert(users).values({
         id,
         email,
@@ -88,8 +90,18 @@ export function registerCommerce(app: Hono<{ Variables: Vars }>, deps: CommerceD
         role,
         passwordHash: hashPassword(password),
         setupComplete: 0,
-        createdAtMs: clock.now(),
+        signupMethod: 'password',
+        createdAtMs,
       })
+      await recordLead(db, {
+        kind: 'signup',
+        sourceId: id,
+        name,
+        email,
+        summary: `${role} account created with a password`,
+        createdAtMs,
+      })
+      if (role === 'advertiser') await notifyAdvertiserSignup(db, { email, name, at: createdAtMs })
       return c.json({ token: signSession(id, sessionSecret), user: { id, email, name, role, setupComplete: false } }, 201)
     } catch (error) {
       const message = messageOf(error)
@@ -246,6 +258,16 @@ async function checkout(c: { get(key: 'user'): UserRow | undefined; req: { json(
       mode: 'mock',
       pace: created.pace,
       emailInvoice: created.emailInvoice ? 1 : 0,
+      createdAtMs: now,
+    })
+    await recordLead(deps.db, {
+      kind: 'advertiser',
+      sourceId: checkoutId,
+      name: user.name,
+      email: user.email,
+      company: created.companyName,
+      country: user.residenceCountry,
+      summary: `Bought ${quote.blocks} impression block${quote.blocks === 1 ? '' : 's'} · ${created.text}`,
       createdAtMs: now,
     })
     return c.json(

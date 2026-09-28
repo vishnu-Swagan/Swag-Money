@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./http": "./src/http.ts",
+    "./admin-auth": "./src/admin-auth.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -17,10 +19,12 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.3",
+    "@neondatabase/serverless": "^1.0.1",
     "@hono/node-server": "^1.19.0",
     "@swag-money/crypto": "workspace:*",
     "@swag-money/shared": "workspace:*",
     "drizzle-orm": "^0.44.5",
-    "hono": "^4.9.6"
+    "hono": "^4.9.6",
+    "postgres": "^3.4.7"
   }
 }
